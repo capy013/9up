@@ -146,6 +146,16 @@
     padding:7px 14px; border-radius:999px;
   }
   .q-diffbadge .pips{letter-spacing:2px;}
+  /* tappable mode toggle in the question header */
+  .q-modetoggle{
+    appearance:none; font-family:inherit; cursor:pointer; background:var(--ink-2);
+    transition:transform .08s, background .15s, border-color .15s;
+  }
+  .q-modetoggle:active{transform:scale(.94); background:var(--ink-3);}
+  .q-modetoggle .mode-swap{
+    font-size:12px; color:var(--mint); font-weight:900; margin-left:1px;
+    opacity:.85;
+  }
   /* growable wrapper that vertically centres the word (+ hints) as a block */
   .q-body{
     flex:1 1 auto; min-height:0; display:flex; flex-direction:column;
@@ -525,7 +535,7 @@
   <section id="screen-question" class="screen">
     <div class="q-head">
       <button class="ghost-btn" onclick="go('home')">‹ 返回</button>
-      <div class="q-diffbadge"><span id="q-modeico">🧭</span> <span id="q-modename">有提示</span></div>
+      <button class="q-diffbadge q-modetoggle" onclick="toggleQuestionMode()" aria-label="切換提示模式"><span id="q-modeico">🧭</span> <span id="q-modename">有提示</span> <span class="mode-swap">⇄</span></button>
     </div>
     <div class="q-body">
       <div class="q-center">
@@ -827,7 +837,7 @@ function spinRole(which){
 }
 
 function drawQuestion(){
-  state.mode = store.hintMode;                  // mode set in settings
+  state.mode = store.hintMode;                  // start from the settings default
   const deck = BANK.length ? BANK : EMBEDDED_BANK;
   // pick a random question, avoiding the last few so it doesn't repeat
   let pool = deck.filter(q => !recentIds.includes(q.id));
@@ -838,13 +848,17 @@ function drawQuestion(){
   const keep = Math.min(5, Math.max(0, deck.length - 1));
   while(recentIds.length > keep) recentIds.shift();
 
-  // word + mode badge
   document.getElementById('q-word').textContent = q.word;
+  renderQuestionMode();                         // badge + hints per current mode
+}
+
+// Render the question screen's mode badge + hints for the CURRENT state.mode.
+// Called on draw and whenever the badge toggle flips the mode mid-question.
+function renderQuestionMode(){
+  const q = state.current; if(!q) return;
   const meta = MODE_META[state.mode] || MODE_META.hints;
   document.getElementById('q-modeico').textContent = meta.ico;
   document.getElementById('q-modename').textContent = meta.name;
-
-  // hints only in 有提示 mode
   const hints = document.getElementById('q-hints');
   if(state.mode === 'hints'){
     hints.style.display = '';
@@ -854,6 +868,16 @@ function drawQuestion(){
   }else{
     hints.style.display = 'none';
   }
+}
+
+// Tap the header badge to flip 有提示 / 冇提示 on the spot. This also updates the
+// saved default so the choice sticks for later rounds.
+function toggleQuestionMode(){
+  state.mode = (state.mode === 'hints') ? 'none' : 'hints';
+  store.hintMode = state.mode;
+  save('cfg.hintMode', store.hintMode);
+  buzz(10);
+  renderQuestionMode();
 }
 
 // ---------- answer peek ----------
