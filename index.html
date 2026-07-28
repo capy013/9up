@@ -287,14 +287,18 @@
 
   /* ============ RESULT ============ */
   .result-wrap{
-    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
-    text-align:center; gap:16px; min-height:0; overflow-y:auto;
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+    text-align:center; gap:12px; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    padding:2px 2px; width:100%;
   }
-  .result-burst{font-size:46px;}
-  .result-word{font-size:19px; color:var(--muted); font-weight:700; letter-spacing:.3em;}
+  .result-burst{font-size:34px; flex:none; margin-top:0;}
+  .result-word{
+    font-size:clamp(26px,7vw,38px); color:var(--gold); font-weight:900; letter-spacing:.04em;
+    text-shadow:0 6px 24px rgba(255,204,0,.28); flex:none;
+  }
   .result-answer{
-    font-size:clamp(30px,8.5vw,46px); font-weight:900; line-height:1.2; color:var(--gold);
-    text-shadow:0 6px 24px rgba(255,204,0,.28);
+    font-size:clamp(16px,4.3vw,19px); font-weight:600; line-height:1.65; color:var(--cream);
+    text-align:left; max-width:36ch; letter-spacing:.01em; flex:none;
   }
   /* recap of the three hints, with the true one lit up */
   .recap-hints{width:100%; display:flex; flex-direction:column; gap:9px; margin-top:2px;}
@@ -355,7 +359,7 @@
   .spin-finger.b{filter:drop-shadow(0 12px 26px rgba(255,204,0,.5));}
 
   /* ============ SETTINGS ============ */
-  .set-list{display:flex; flex-direction:column; gap:14px; margin-top:6px; flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-right:4px;}
+  .set-list{display:flex; flex-direction:column; gap:14px; margin-top:2px; flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:4px 4px 8px; -webkit-mask-image:linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%); mask-image:linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%);}
   .set-row{
     display:flex; align-items:center; justify-content:space-between; gap:16px;
     background:var(--ink-2); border:1px solid var(--line);
@@ -551,6 +555,7 @@
       <div class="gate-timebadge hidden" id="gate-timebadge"><b id="gate-timeval">10</b><span>秒睇答案</span></div>
     </div>
     <button class="btn" id="peek-btn">撳實睇答案</button>
+    <button class="btn mint" id="gate-next-btn" onclick="finishPeek()" style="margin-top:12px; display:none;">睇完！開始9UP！</button>
   </section>
 
   <!-- ========== ANSWER (visible while holding / timed) ========== -->
@@ -637,9 +642,9 @@
       <button class="ghost-btn" onclick="go('home')">‹ 返回</button>
       <div class="brand">⚙️ 設 定</div>
     </div>
-    <div class="eyebrow">偏好</div>
-    <div class="title-lg">設定</div>
-    <div class="title-sub">呢啲設定會記喺部機到。</div>
+    <div class="eyebrow" style="margin-top:4px;">偏好</div>
+    <div class="title-lg" style="margin:2px 0 2px;">設定</div>
+    <div class="title-sub" style="margin-bottom:10px;">呢啲設定會記喺部機到。</div>
     <div class="set-list">
       <div class="set-row set-row-col">
         <div class="s-row-top">
@@ -678,8 +683,7 @@
         <div class="toggle on" id="tg-haptic" onclick="toggleHaptic()"><div class="knob"></div></div>
       </div>
     </div>
-    <div class="footer-hint">9UP 派對出題機 · 完全離線運作</div>
-    <div class="spacer"></div>
+    <div class="footer-hint" style="flex:none;">9UP 派對出題機 · 完全離線運作</div>
   </section>
 
   <!-- ========== HELP ========== -->
@@ -873,11 +877,13 @@ function fillAnswer(){
   }
 }
 
-// reset the gate every time we arrive, so a spent round starts fresh
+// reset the gate every time we arrive fresh (from the question screen), so a
+// spent round starts clean. Returning here after a peek does NOT reset.
 function resetGate(){
   const btn = document.getElementById('peek-btn');
   btn.disabled = false;
   btn.style.display = '';
+  document.getElementById('gate-next-btn').style.display = 'none';   // not peeked yet
   document.getElementById('secret-wrap').classList.remove('expired');
   document.getElementById('expired-overlay').classList.remove('show');
   clearInterval(peekCountTimer);
@@ -933,12 +939,22 @@ function peekStart(e){
   document.getElementById('ans-count').textContent = '';   // no countdown in hold mode
   document.getElementById('secret-wrap').classList.remove('expired');
   document.getElementById('expired-overlay').classList.remove('show');
+  // in hold mode the on-answer button is unreachable (finger is down) — hide it;
+  // the "開始9UP" button lives on the gate screen after release instead
+  document.getElementById('answer-next-btn').style.display = 'none';
   go('answer');
 }
 function peekEnd(){
   if(store.peekMode!=='hold') return;
   if(document.getElementById('screen-answer').classList.contains('active')){
-    go('answerGate');                          // released → back to gate (can retry)
+    // return to the gate WITHOUT resetting (so the proceed button can show)
+    document.getElementById('screen-answer').classList.remove('active');
+    document.getElementById('screen-answerGate').classList.add('active');
+    // 老實人 has now seen the answer → offer a way forward
+    document.getElementById('gate-next-btn').style.display = '';
+    // update the hint copy so it's clear they can either re-peek or proceed
+    const desc = document.getElementById('gate-desc');
+    if(desc) desc.innerHTML = '睇完可以再撳實重溫，<br>或者㩒下面「開始9UP」繼續。';
   }
 }
 
@@ -949,6 +965,7 @@ function peekTap(){
   fillAnswer();
   document.getElementById('secret-wrap').classList.remove('expired');
   document.getElementById('expired-overlay').classList.remove('show');
+  document.getElementById('answer-next-btn').style.display = '';   // tap-to-proceed lives here
   go('answer');
   startCountdown(store.peekSecs, timedExpire);
 }
