@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1a1a1a">
+<title>9UP · 派對出題機</title>
+<style>
+  /* ============ DESIGN TOKENS ============
+     Palette: charcoal base, gold primary, electric-blue accent, white text
+     (token NAMES kept stable; only VALUES remapped)
+       --ink/-2/-3  = Background / bg-200 / bg-300
+       --coral/-dk  = Primary (gold) / primary-300  → primary buttons & accents
+       --mint/-dk   = Accent (blue) / accent-200     → secondary accents & "true"
+       --gold       = highlight (gold)               → result answer
+       --cream      = Text (white) ; --muted = dimmed text
+  */
+  :root{
+    --ink:        #1a1a1a;   /* Background */
+    --ink-2:      #292929;   /* bg-200 — raised panel */
+    --ink-3:      #404040;   /* bg-300 — higher panel / pressed */
+    --coral:      #ffcc00;   /* Primary (gold) — primary accent role */
+    --coral-dk:   #916e00;   /* primary-300 — button drop-shadow */
+    --mint:       #00bfff;   /* Accent (electric blue) — secondary accent */
+    --mint-dk:    #00619a;   /* accent-200 */
+    --gold:       #ffcc00;   /* highlight / correct answer */
+    --cream:      #ffffff;   /* Text */
+    --muted:      #9a9a9a;   /* dimmed secondary text */
+    --line:       rgba(255,255,255,.10);
+    --shadow:     0 18px 40px -12px rgba(0,0,0,.7);
+    --r-lg: 28px; --r-md: 20px; --r-sm: 14px;
+    --safe-t: env(safe-area-inset-top, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    font-family:"PingFang HK","Noto Sans HK","Hiragino Sans GB","Microsoft JhengHei",system-ui,-apple-system,sans-serif;
+    background:
+      radial-gradient(120% 90% at 50% -10%, #2e2e2e 0%, var(--ink) 55%, #0d0d0d 100%);
+    color:var(--cream);
+    overflow:hidden;
+    user-select:none;
+    -webkit-user-select:none;
+    touch-action:manipulation;
+  }
+  #app{
+    height:100dvh;
+    display:flex;
+    flex-direction:column;
+    padding:calc(var(--safe-t) + 14px) 20px calc(var(--safe-b) + 20px);
+    max-width:520px;
+    margin:0 auto;
+    position:relative;
+  }
+
+  /* ============ SCREEN SYSTEM ============ */
+  .screen{
+    flex:1;
+    display:none;
+    flex-direction:column;
+    min-height:0;
+    animation:pop .32s cubic-bezier(.2,.9,.25,1.15);
+  }
+  .screen.active{display:flex;}
+  @keyframes pop{
+    from{opacity:0; transform:translateY(14px) scale(.98);}
+    to{opacity:1; transform:none;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .screen,.card-flip,.dot{animation:none!important; transition:none!important;}
+  }
+
+  /* ============ SHARED BITS ============ */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:6px; min-height:34px;
+  }
+  .brand{
+    font-weight:900; letter-spacing:.14em; font-size:15px; color:var(--muted);
+    display:flex; align-items:center; gap:8px;
+  }
+  .brand b{color:var(--coral); letter-spacing:.28em;}
+  .ghost-btn{
+    appearance:none; border:1px solid var(--line); background:rgba(255,255,255,.03);
+    color:var(--muted); font-size:14px; font-weight:700; padding:8px 14px;
+    border-radius:999px; cursor:pointer; font-family:inherit;
+  }
+  .ghost-btn:active{background:rgba(255,255,255,.09); transform:scale(.96);}
+
+  .eyebrow{
+    font-size:13px; font-weight:800; letter-spacing:.32em; color:var(--mint);
+    text-transform:uppercase; margin-bottom:14px;
+  }
+  .spacer{flex:1;}
+
+  /* Big primary action button — thumb friendly */
+  .btn{
+    appearance:none; border:none; cursor:pointer; font-family:inherit;
+    width:100%; padding:22px; border-radius:var(--r-md);
+    font-size:22px; font-weight:900; letter-spacing:.04em;
+    color:var(--ink); background:var(--coral);
+    box-shadow:0 10px 0 var(--coral-dk), var(--shadow);
+    transition:transform .06s, box-shadow .06s;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+  }
+  .btn:active{transform:translateY(6px); box-shadow:0 4px 0 var(--coral-dk), var(--shadow);}
+  .btn.mint{background:var(--mint); box-shadow:0 10px 0 var(--mint-dk), var(--shadow);}
+  .btn.ghost{
+    background:rgba(255,255,255,.04); color:var(--cream);
+    box-shadow:none; border:1px solid var(--line);
+    font-size:18px; padding:18px;
+  }
+  .btn.ghost:active{transform:scale(.97); background:rgba(255,255,255,.09);}
+  .btn:disabled{opacity:.4; box-shadow:none; transform:none;}
+  .btn-row{display:flex; gap:12px; margin-top:12px;}
+  .btn-row .btn{margin:0;}
+
+  /* ============ HOME ============ */
+  .logo-wrap{text-align:center; margin-top:8vh;}
+  .logo-num{
+    font-size:clamp(104px,32vw,180px); font-weight:900; line-height:.82;
+    background:linear-gradient(150deg, var(--gold) 0%, #ffe066 38%, var(--mint) 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    letter-spacing:.01em; filter:drop-shadow(0 8px 30px rgba(255,204,0,.28));
+  }
+  .logo-sub{
+    font-size:26px; font-weight:900; letter-spacing:.5em; color:var(--cream);
+    margin:6px 0 4px 8px;
+  }
+  .logo-tag{font-size:14px; color:var(--muted); letter-spacing:.28em; margin-bottom:2px;}
+  .home-actions{margin-top:auto; display:flex; flex-direction:column; gap:14px;}
+  .home-mini{
+    display:flex; gap:12px;
+  }
+  .home-mini .btn{font-size:16px; padding:15px;}
+
+  /* ============ DIFFICULTY ============ */
+  .diff-grid{display:flex; flex-direction:column; gap:16px; margin:6px 0;}
+  .diff-card{
+    appearance:none; font-family:inherit; cursor:pointer; text-align:left;
+    border:1px solid var(--line); border-radius:var(--r-md);
+    background:var(--ink-2); color:var(--cream);
+    padding:22px 24px; display:flex; align-items:center; gap:20px;
+    transition:transform .08s, border-color .15s, background .15s;
+    position:relative; overflow:hidden;
+  }
+  .diff-card:active{transform:scale(.98);}
+  .diff-card .pips{font-size:30px; letter-spacing:4px; width:120px;}
+  .diff-card .d-txt{flex:1;}
+  .diff-card .d-txt b{display:block; font-size:27px; font-weight:900; margin-bottom:3px;}
+  .diff-card .d-txt span{font-size:14px; color:var(--muted);}
+  .diff-card .d-arrow{font-size:26px; color:var(--muted);}
+  .diff-card[data-m="none"]{--gl:var(--gold);}
+  .diff-card[data-m="hints"]{--gl:var(--mint);}
+  .diff-card::before{content:""; position:absolute; left:0; top:0; bottom:0; width:6px; background:var(--gl);}
+  .diff-card .pips{color:var(--gl);}
+  .diff-card .mode-ico{font-size:40px; width:120px; text-align:center;}
+  /* bank load status (loading / failed) on the mode screen */
+  .bank-status{text-align:center; color:var(--muted); font-size:14px; margin-top:18px; line-height:1.6; min-height:20px;}
+  .bank-status.err{color:var(--gold);}
+
+  /* ============ QUESTION ============ */
+  .q-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:auto;}
+  .q-diffbadge{
+    display:inline-flex; align-items:center; gap:7px; font-size:13px; font-weight:800;
+    letter-spacing:.1em; color:var(--muted); border:1px solid var(--line);
+    padding:7px 14px; border-radius:999px;
+  }
+  .q-diffbadge .pips{letter-spacing:2px;}
+  .q-center{
+    flex:0 1 auto; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; text-align:center; padding:10px 0;
+  }
+  .q-label{font-size:14px; letter-spacing:.4em; color:var(--mint); font-weight:800; margin-bottom:20px;}
+  .q-word{
+    font-size:clamp(46px,15vw,78px); font-weight:900; line-height:1.05;
+    letter-spacing:.02em; color:var(--cream);
+    text-shadow:0 6px 26px rgba(0,0,0,.4);
+  }
+  .hints{
+    display:flex; flex-direction:column; gap:12px; margin:30px 0 auto;
+  }
+  .hint-title{
+    text-align:center; font-size:13px; letter-spacing:.34em; color:var(--muted);
+    font-weight:700; margin-bottom:4px;
+  }
+  .hint{
+    display:flex; align-items:center; justify-content:center; gap:16px;
+    background:var(--ink-2); border:1px solid var(--line);
+    border-radius:var(--r-sm); padding:16px 20px;
+  }
+  .hint .h-num{
+    width:34px; height:34px; flex:none; border-radius:50%;
+    display:grid; place-items:center; font-weight:900; font-size:16px;
+    background:rgba(255,255,255,.06); color:var(--muted);
+  }
+  .hint .h-txt{font-size:26px; font-weight:800; letter-spacing:.06em; text-align:center;}
+
+  /* ============ ANSWER (secret) ============ */
+  #screen-answer{background:transparent;}
+  .secret-wrap{
+    flex:1; display:flex; flex-direction:column;
+    border-radius:var(--r-lg);
+    background:
+      repeating-linear-gradient(45deg, #202020 0 22px, #191919 22px 44px);
+    border:2px solid var(--coral);
+    padding:26px 24px; box-shadow:var(--shadow);
+    position:relative; overflow:hidden;
+  }
+  .secret-tag{
+    align-self:center; background:var(--coral); color:var(--ink);
+    font-weight:900; letter-spacing:.18em; font-size:14px;
+    padding:8px 20px; border-radius:999px; margin-bottom:6px;
+  }
+  .secret-warn{
+    text-align:center; color:var(--gold); font-size:15px; font-weight:800;
+    letter-spacing:.05em; margin:14px 0;
+  }
+  .ans-center{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; gap:18px;
+  }
+  .ans-word{font-size:20px; color:var(--muted); font-weight:700; letter-spacing:.3em;}
+  .ans-body{
+    font-size:clamp(30px,9vw,46px); font-weight:900; line-height:1.2; color:var(--cream);
+  }
+  .ans-truehint{
+    font-size:15px; color:var(--mint); font-weight:800; letter-spacing:.06em;
+    background:rgba(0,191,255,.12); border:1px solid rgba(0,191,255,.35);
+    padding:8px 16px; border-radius:999px;
+  }
+  .countdown{
+    position:absolute; top:20px; right:22px; font-size:34px; font-weight:900;
+    color:var(--coral); font-variant-numeric:tabular-nums;
+  }
+  /* timed peek: when the clock runs out the card greys and locks (no re-peek) */
+  .expired-overlay{
+    position:absolute; inset:0; display:none; flex-direction:column;
+    align-items:center; justify-content:center; gap:16px;
+    background:rgba(13,13,13,.93); backdrop-filter:blur(3px);
+    border-radius:var(--r-lg); text-align:center;
+  }
+  .expired-overlay.show{display:flex;}
+  .expired-lock{font-size:60px; filter:grayscale(1) opacity(.9);}
+  .expired-txt{font-size:26px; font-weight:900; color:var(--muted); letter-spacing:.08em;}
+  .secret-wrap.expired{filter:grayscale(.85) brightness(.7);}
+  /* timed-mode gate: a ready prompt showing how long you'll get */
+  .gate-timebadge{
+    display:inline-flex; align-items:baseline; gap:6px;
+    background:rgba(255,204,0,.12); border:1px solid rgba(255,204,0,.38);
+    color:var(--gold); padding:12px 22px; border-radius:999px;
+  }
+  .gate-timebadge b{font-size:40px; font-weight:900; font-variant-numeric:tabular-nums;}
+  .gate-timebadge span{font-size:16px; font-weight:800;}
+  .gate-timebadge.hidden{display:none;}
+
+  /* Peek gate — hold to reveal so bystanders can't accidentally see */
+  .gate{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; gap:24px; padding:20px;
+  }
+  .gate-icon{font-size:64px;}
+  .gate h2{font-size:30px; font-weight:900; margin:0;}
+  .gate p{color:var(--muted); font-size:16px; margin:0; line-height:1.6; max-width:300px;}
+
+  /* ============ POINT (指向) ============ */
+  .point-head{text-align:center; margin-bottom:6px;}
+  .point-head h2{font-size:28px; font-weight:900; margin:4px 0;}
+  .point-head p{color:var(--muted); font-size:14px; margin:0; line-height:1.5;}
+  /* ============ REVEAL LOCK ============ */
+  .lock-stage{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:26px;
+  }
+  .lock-title{font-size:26px; font-weight:900; text-align:center;}
+  .lock-title span{color:var(--muted); font-size:15px; display:block; margin-top:8px; font-weight:600; letter-spacing:.08em;}
+  /* slide to unlock */
+  .slider{
+    width:100%; max-width:360px; height:78px; border-radius:999px;
+    background:var(--ink-2); border:1px solid var(--line); position:relative;
+    overflow:hidden; touch-action:none;
+  }
+  .slider .track-label{
+    position:absolute; inset:0; display:grid; place-items:center;
+    color:var(--muted); font-weight:800; letter-spacing:.1em; font-size:16px;
+    padding-left:60px;
+  }
+  .slider .fill{
+    position:absolute; left:0; top:0; bottom:0; width:70px;
+    background:linear-gradient(90deg, var(--coral-dk), var(--coral));
+    opacity:.25;
+  }
+  .slider .knob{
+    position:absolute; left:5px; top:5px; width:68px; height:68px; border-radius:50%;
+    background:var(--coral); box-shadow:0 6px 16px rgba(0,0,0,.4);
+    display:grid; place-items:center; font-size:30px; color:var(--ink);
+    z-index:2;
+  }
+
+  /* ============ RESULT ============ */
+  .result-wrap{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; gap:16px; min-height:0; overflow-y:auto;
+  }
+  .result-burst{font-size:46px;}
+  .result-word{font-size:19px; color:var(--muted); font-weight:700; letter-spacing:.3em;}
+  .result-answer{
+    font-size:clamp(30px,8.5vw,46px); font-weight:900; line-height:1.2; color:var(--gold);
+    text-shadow:0 6px 24px rgba(255,204,0,.28);
+  }
+  /* recap of the three hints, with the true one lit up */
+  .recap-hints{width:100%; display:flex; flex-direction:column; gap:9px; margin-top:2px;}
+  .recap-title{font-size:12px; letter-spacing:.3em; color:var(--muted); font-weight:700;}
+  .recap{
+    display:flex; align-items:center; gap:14px; padding:13px 18px;
+    background:var(--ink-2); border:1px solid var(--line); border-radius:var(--r-sm);
+  }
+  .recap .r-num{
+    width:30px; height:30px; flex:none; border-radius:50%; display:grid; place-items:center;
+    font-weight:900; font-size:15px; background:rgba(255,255,255,.06); color:var(--muted);
+  }
+  .recap .r-txt{font-size:22px; font-weight:800; letter-spacing:.05em; flex:1; text-align:left; color:var(--cream);}
+  .recap.is-true{border-color:var(--mint); background:rgba(0,191,255,.14);}
+  .recap.is-true .r-num{background:var(--mint); color:var(--ink);}
+  .recap.is-true .r-txt{color:var(--mint);}
+  .recap .r-tag{font-size:12px; font-weight:900; color:var(--mint); letter-spacing:.1em;}
+
+  /* ============ ROLE SELECT (揀角 hub) ============ */
+  .role-intro{text-align:center; margin-bottom:4px;}
+  .role-cards{display:flex; flex-direction:column; gap:14px; margin:2px 0;}
+  /* hub pick buttons — tap to open that role's spin screen */
+  .role-pick{
+    appearance:none; font-family:inherit; cursor:pointer; text-align:left; width:100%;
+    color:var(--cream);
+    background:var(--ink-2); border:1px solid var(--line); border-radius:var(--r-md);
+    padding:22px 22px; position:relative; overflow:hidden;
+    display:flex; align-items:center; gap:16px;
+    transition:transform .08s, background .15s;
+  }
+  .role-pick:active{transform:scale(.98); background:var(--ink-3);}
+  .role-pick .rc-emoji{font-size:42px; flex:none;}
+  .role-pick .rc-name{flex:1;}
+  .role-pick .rc-name b{display:block; font-size:25px; font-weight:900; color:var(--cream);}
+  .role-pick .rc-name span{font-size:13px; color:var(--muted);}
+  .role-pick .rc-go{font-size:15px; font-weight:800; color:var(--muted); flex:none;}
+  .role-pick::before{content:""; position:absolute; left:0; top:0; bottom:0; width:6px;}
+  .role-pick.role-a::before{background:var(--mint);}
+  .role-pick.role-b::before{background:var(--gold);}
+  .role-pick.role-a .rc-go{color:var(--mint);}
+  .role-pick.role-b .rc-go{color:var(--gold);}
+  .role-hint{text-align:center; color:var(--muted); font-size:13px; line-height:1.5; margin-top:8px;}
+
+  /* ============ SPIN SCREENS (big finger) ============ */
+  .spin-head{text-align:center; margin-top:2vh;}
+  .spin-emoji{font-size:52px; margin-bottom:6px;}
+  .spin-title{font-size:30px; font-weight:900;}
+  .spin-sub{color:var(--muted); font-size:15px; margin-top:4px;}
+  .spin-stage{
+    flex:1; display:flex; align-items:center; justify-content:center; min-height:0; padding:10px 0;
+  }
+  .spin-finger{
+    font-size:clamp(150px, 46vw, 220px); line-height:1;
+    transition:transform .5s cubic-bezier(.15,.85,.25,1.05);
+    transform:rotate(var(--rot,0deg));
+  }
+  .spin-finger.a{filter:drop-shadow(0 12px 26px rgba(0,191,255,.5));}
+  .spin-finger.b{filter:drop-shadow(0 12px 26px rgba(255,204,0,.5));}
+
+  /* ============ SETTINGS ============ */
+  .set-list{display:flex; flex-direction:column; gap:14px; margin-top:6px;}
+  .set-row{
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    background:var(--ink-2); border:1px solid var(--line);
+    border-radius:var(--r-md); padding:20px 22px;
+  }
+  .set-row .s-txt b{display:block; font-size:18px; font-weight:800;}
+  .set-row .s-txt span{font-size:13px; color:var(--muted);}
+  /* toggle */
+  .toggle{
+    width:62px; height:36px; border-radius:999px; background:var(--ink-3);
+    border:1px solid var(--line); position:relative; cursor:pointer; flex:none;
+    transition:background .2s;
+  }
+  .toggle .knob{
+    position:absolute; top:3px; left:3px; width:28px; height:28px; border-radius:50%;
+    background:var(--muted); transition:transform .2s, background .2s;
+  }
+  .toggle.on{background:var(--mint);}
+  .toggle.on .knob{transform:translateX(26px); background:var(--ink);}
+  .seg{display:flex; gap:6px; background:var(--ink-3); padding:5px; border-radius:999px;}
+  .seg button{
+    appearance:none; border:none; background:transparent; color:var(--muted);
+    font-family:inherit; font-weight:800; font-size:14px; padding:9px 16px;
+    border-radius:999px; cursor:pointer;
+  }
+  .seg button.on{background:var(--coral); color:var(--ink);}
+  /* stacked row variant: label on top, full-width segmented control below */
+  .set-row-col{flex-direction:column; align-items:stretch; gap:14px;}
+  .set-row-col .s-row-top{display:flex; align-items:center; justify-content:space-between;}
+  .seg-wide{width:100%;}
+  .seg-wide button{flex:1; padding:12px 8px; text-align:center;}
+  #row-peektime{transition:opacity .2s;}
+  #row-peektime.disabled{opacity:.4; pointer-events:none;}
+  /* seconds badge + range slider */
+  .secs-badge{
+    background:var(--coral); color:var(--ink); font-weight:900; font-size:16px;
+    padding:6px 16px; border-radius:999px; letter-spacing:.02em; min-width:78px; text-align:center;
+  }
+  .range-wrap{width:100%;}
+  .range{
+    -webkit-appearance:none; appearance:none; width:100%; height:14px; border-radius:999px;
+    background:var(--ink-3); outline:none; cursor:pointer; margin:2px 0;
+  }
+  .range::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:34px; height:34px; border-radius:50%;
+    background:var(--coral); border:4px solid var(--ink-2);
+    box-shadow:0 4px 12px rgba(0,0,0,.4); cursor:grab;
+  }
+  .range::-webkit-slider-thumb:active{cursor:grabbing; transform:scale(1.05);}
+  .range::-moz-range-thumb{
+    width:34px; height:34px; border-radius:50%; background:var(--coral);
+    border:4px solid var(--ink-2); box-shadow:0 4px 12px rgba(0,0,0,.4); cursor:grab;
+  }
+  .range::-moz-range-progress{background:var(--coral); height:14px; border-radius:999px;}
+  .range-scale{display:flex; justify-content:space-between; color:var(--muted); font-size:12px; font-weight:700; margin-top:6px;}
+
+  /* ============ HELP ============ */
+  .help-body{overflow-y:auto; -webkit-overflow-scrolling:touch; padding-right:4px; flex:1;}
+  .help-body::-webkit-scrollbar{width:0;}
+  .step{
+    display:flex; gap:16px; padding:16px 0; border-bottom:1px solid var(--line);
+  }
+  .step .s-n{
+    width:38px; height:38px; flex:none; border-radius:12px;
+    display:grid; place-items:center; font-weight:900; font-size:17px;
+    background:var(--coral); color:var(--ink);
+  }
+  .step .s-c b{display:block; font-size:18px; font-weight:800; margin-bottom:4px;}
+  .step .s-c p{margin:0; color:var(--muted); font-size:15px; line-height:1.6;}
+
+  .footer-hint{text-align:center; color:var(--muted); font-size:12px; letter-spacing:.1em; margin-top:14px; opacity:.7;}
+
+  .title-lg{font-size:32px; font-weight:900; letter-spacing:.02em; margin:2px 0 4px;}
+  .title-sub{color:var(--muted); font-size:14px; margin-bottom:18px; line-height:1.5;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ========== HOME ========== -->
+  <section id="screen-home" class="screen active">
+    <div class="topbar">
+      <div class="brand"><b>9UP</b> PARTY</div>
+      <button class="ghost-btn" onclick="go('help')">玩法</button>
+    </div>
+    <div class="logo-wrap">
+      <div class="logo-num">9UP</div>
+      <div class="logo-sub">派對出題機</div>
+      <div class="logo-tag">實體卡牌 · 面對面 · 一機走天涯</div>
+    </div>
+    <div class="home-actions">
+      <button class="btn" onclick="startRound()">開始出題</button>
+      <button class="btn mint" onclick="go('roleSelect')">🎯 選角</button>
+      <button class="btn ghost" onclick="go('settings')">設定</button>
+    </div>
+  </section>
+
+  <!-- ========== ROLE SELECT HUB (揀角色) ========== -->
+  <section id="screen-roleSelect" class="screen">
+    <div class="topbar">
+      <button class="ghost-btn" onclick="go('home')">‹ 返回</button>
+      <div class="brand">🎯 選 角</div>
+    </div>
+    <div class="role-intro">
+      <div class="eyebrow" style="margin-bottom:6px;">選角工具</div>
+      <div class="title-lg" style="margin:0;">轉手指分角色</div>
+      <div class="title-sub" style="margin:6px 0 14px;">將部機擺喺枱中間，一次過轉手指指定諗樣同老實人。㩒開始，轉完一個會自動接住轉下一個。</div>
+    </div>
+    <div class="role-cards">
+      <button class="role-pick role-a" onclick="startRoleFlow()">
+        <div class="rc-emoji">🧠</div>
+        <div class="rc-name"><b>諗樣</b><span>負責猜邊個 9up 嘅人</span></div>
+        <div class="rc-go" id="pick-thinker-go">轉手指 ›</div>
+      </button>
+      <button class="role-pick role-b" onclick="go('spinHonest')">
+        <div class="rc-emoji">😇</div>
+        <div class="rc-name"><b>老實人</b><span>手機睇到真答案嗰個</span></div>
+        <div class="rc-go" id="pick-honest-go">轉手指 ›</div>
+      </button>
+    </div>
+    <div class="role-hint">或者你哋自己用實體牌分都得</div>
+    <div class="spacer"></div>
+    <button class="btn" onclick="startRoleFlow()">開始轉手指 →</button>
+  </section>
+
+  <!-- ========== SPIN: 諗樣 ========== -->
+  <section id="screen-spinThinker" class="screen">
+    <div class="topbar">
+      <button class="ghost-btn" onclick="go('roleSelect')">‹ 選角</button>
+      <div class="brand">🧠 諗 樣 · 1/2</div>
+    </div>
+    <div class="spin-head">
+      <div class="spin-emoji">🧠</div>
+      <div class="spin-title">邊個做諗樣？</div>
+      <div class="spin-sub">負責猜邊個 9up 嘅人</div>
+    </div>
+    <div class="spin-stage">
+      <div class="spin-finger a" id="arrow-thinker">👉</div>
+    </div>
+    <button class="btn mint" id="spin-thinker-btn" onclick="spinRole('thinker')">🔄 轉手指</button>
+    <button class="btn" id="spin-thinker-next" onclick="go('spinHonest')" style="margin-top:12px;">去老實人 →</button>
+  </section>
+
+  <!-- ========== SPIN: 老實人 ========== -->
+  <section id="screen-spinHonest" class="screen">
+    <div class="topbar">
+      <button class="ghost-btn" onclick="go('spinThinker')">‹ 諗樣</button>
+      <div class="brand">😇 老 實 人 · 2/2</div>
+    </div>
+    <div class="spin-head">
+      <div class="spin-emoji">😇</div>
+      <div class="spin-title">邊個做老實人？</div>
+      <div class="spin-sub">手機睇到真答案嗰個</div>
+    </div>
+    <div class="spin-stage">
+      <div class="spin-finger b" id="arrow-honest">👉</div>
+    </div>
+    <button class="btn" id="spin-honest-btn" onclick="spinRole('honest')">🔄 轉手指</button>
+    <button class="btn mint" id="spin-honest-next" onclick="go('home')" style="margin-top:12px;">搞掂，返主頁 →</button>
+  </section>
+
+  <!-- ========== DIFFICULTY ========== -->
+  <section id="screen-diff" class="screen">
+    <div class="topbar">
+      <button class="ghost-btn" onclick="go('home')">‹ 返回</button>
+      <div class="brand"><b>9UP</b> PARTY</div>
+    </div>
+    <div class="eyebrow">新一題</div>
+    <div class="title-lg">揀個模式</div>
+    <div class="title-sub">大家夾定玩邊個，任何人都可以㩒。</div>
+    <div class="diff-grid">
+      <button class="diff-card" data-m="none" onclick="pickMode('none')">
+        <div class="mode-ico">🙈</div>
+        <div class="d-txt"><b>冇提示</b><span>淨係得個怪詞，靠亂噏</span></div>
+        <div class="d-arrow">›</div>
+      </button>
+      <button class="diff-card" data-m="hints" onclick="pickMode('hints')">
+        <div class="mode-ico">🧭</div>
+        <div class="d-txt"><b>有提示</b><span>三個方向，一真兩假</span></div>
+        <div class="d-arrow">›</div>
+      </button>
+    </div>
+    <!-- shown while the bank is still loading / if it failed -->
+    <div class="bank-status" id="bank-status"></div>
+    <div class="spacer"></div>
+  </section>
+
+  <!-- ========== QUESTION ========== -->
+  <section id="screen-question" class="screen">
+    <div class="q-head">
+      <button class="ghost-btn" onclick="go('diff')">‹ 模式</button>
+      <div class="q-diffbadge"><span id="q-modeico">🧭</span> <span id="q-modename">有提示</span></div>
+    </div>
+    <div class="q-center">
+      <div class="q-label">題 目</div>
+      <div class="q-word" id="q-word">—</div>
+    </div>
+    <div class="hints" id="q-hints">
+      <div class="hint-title">三 個 方 向 · 只 有 一 個 係 真</div>
+      <div class="hint"><div class="h-num">1</div><div class="h-txt" id="q-h1">—</div></div>
+      <div class="hint"><div class="h-num">2</div><div class="h-txt" id="q-h2">—</div></div>
+      <div class="hint"><div class="h-num">3</div><div class="h-txt" id="q-h3">—</div></div>
+    </div>
+    <button class="btn mint" onclick="go('answerGate')">老實人睇答案 →</button>
+  </section>
+
+  <!-- ========== ANSWER GATE (hold to reveal) ========== -->
+  <section id="screen-answerGate" class="screen">
+    <div class="topbar">
+      <button class="ghost-btn" onclick="go('question')">‹ 返回題目</button>
+      <div class="brand">🤫 秘 密</div>
+    </div>
+    <div class="gate">
+      <div class="gate-icon">🙈</div>
+      <h2 id="gate-head">淨係老實人先好㩒</h2>
+      <p id="gate-desc">其他人請望開螢幕。<br>撳實下面粒掣先睇到真答案，放手就即刻收埋。</p>
+      <div class="gate-timebadge hidden" id="gate-timebadge"><b id="gate-timeval">10</b><span>秒睇答案</span></div>
+    </div>
+    <button class="btn" id="peek-btn"
+      onpointerdown="openAnswer(event)" onpointerup="peekEnd()" onpointercancel="peekEnd()" onpointerleave="peekEnd()">
+      撳實睇答案
+    </button>
+  </section>
+
+  <!-- ========== ANSWER (visible while holding / timed) ========== -->
+  <section id="screen-answer" class="screen">
+    <div class="secret-wrap" id="secret-wrap">
+      <div class="countdown" id="ans-count"></div>
+      <div class="secret-tag">真 · 答 案</div>
+      <div class="ans-center">
+        <div class="ans-word" id="ans-word">—</div>
+        <div class="ans-body" id="ans-body">—</div>
+        <div class="ans-truehint" id="ans-truehint">真方向：—</div>
+      </div>
+      <!-- shown when timed peek runs out: greys the card, no re-peek -->
+      <div class="expired-overlay" id="expired-overlay">
+        <div class="expired-lock">⏱️</div>
+        <div class="expired-txt">夠鐘，準備開始</div>
+      </div>
+    </div>
+    <button class="btn mint" id="answer-next-btn" onclick="finishPeek()" style="margin-top:12px;">睇完！開始9UP！</button>
+  </section>
+
+  <!-- ========== 9UPING (shown to everyone after老實人 peeks) ========== -->
+  <section id="screen-point" class="screen">
+    <div class="topbar">
+      <button class="ghost-btn" onclick="go('question')">‹ 題目</button>
+      <div class="brand">🎤 9UP ING</div>
+    </div>
+    <div class="point-head">
+      <h2>大家可以 9UP 喇！</h2>
+    </div>
+    <div class="q-center" style="flex:0 1 auto; padding:6px 0;">
+      <div class="q-label">題 目</div>
+      <div class="q-word" id="pt-word" style="font-size:clamp(38px,12vw,60px);">—</div>
+    </div>
+    <div class="hints" id="pt-hints">
+      <div class="hint-title">三 個 方 向 · 只 有 一 個 係 真</div>
+      <div class="hint"><div class="h-num">1</div><div class="h-txt" id="pt-h1">—</div></div>
+      <div class="hint"><div class="h-num">2</div><div class="h-txt" id="pt-h2">—</div></div>
+      <div class="hint"><div class="h-num">3</div><div class="h-txt" id="pt-h3">—</div></div>
+    </div>
+    <button class="btn" onclick="go('revealLock')">開估 →</button>
+  </section>
+
+  <!-- ========== REVEAL LOCK (slide to unlock, double confirm) ========== -->
+  <section id="screen-revealLock" class="screen">
+    <div class="topbar">
+      <button class="ghost-btn" onclick="go('point')">‹ 開估中</button>
+      <div class="brand">🔒 開 估</div>
+    </div>
+    <div class="lock-stage">
+      <div class="lock-title">確定要開估？<span>㩒錯咪嘥咗一鋪 · 滑到底先揭曉</span></div>
+      <div class="slider" id="reveal-slider">
+        <div class="fill" id="slider-fill"></div>
+        <div class="track-label">→ → →　滑 動 開 估　→ → →</div>
+        <div class="knob" id="slider-knob">🔓</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+  </section>
+
+  <!-- ========== RESULT ========== -->
+  <section id="screen-result" class="screen">
+    <div class="topbar">
+      <div class="brand"><b>9UP</b> 開 估</div>
+    </div>
+    <div class="result-wrap">
+      <div class="result-burst">🎉</div>
+      <div class="result-word" id="res-word">—</div>
+      <div class="result-answer" id="res-answer">—</div>
+      <div class="recap-hints" id="res-recap">
+        <div class="recap-title">三 個 方 向</div>
+        <div class="recap" id="recap-1"><div class="r-num">1</div><div class="r-txt" id="recap-t1">—</div><div class="r-tag" id="recap-tag1"></div></div>
+        <div class="recap" id="recap-2"><div class="r-num">2</div><div class="r-txt" id="recap-t2">—</div><div class="r-tag" id="recap-tag2"></div></div>
+        <div class="recap" id="recap-3"><div class="r-num">3</div><div class="r-txt" id="recap-t3">—</div><div class="r-tag" id="recap-tag3"></div></div>
+      </div>
+    </div>
+    <button class="btn" onclick="startRound()">下一題 →</button>
+    <button class="btn ghost" onclick="go('home')" style="margin-top:12px;">返主頁</button>
+  </section>
+
+  <!-- ========== SETTINGS ========== -->
+  <section id="screen-settings" class="screen">
+    <div class="topbar">
+      <button class="ghost-btn" onclick="go('home')">‹ 返回</button>
+      <div class="brand">⚙️ 設 定</div>
+    </div>
+    <div class="eyebrow">偏好</div>
+    <div class="title-lg">設定</div>
+    <div class="title-sub">呢啲設定會記喺部機到。</div>
+    <div class="set-list">
+      <div class="set-row set-row-col">
+        <div class="s-row-top">
+          <div class="s-txt"><b>老實人睇答案</b><span>選擇偷睇答案嘅方式</span></div>
+        </div>
+        <div class="seg seg-wide" id="seg-peekmode">
+          <button data-v="hold" class="on">撳實先睇</button>
+          <button data-v="timed">限時睇</button>
+        </div>
+      </div>
+      <div class="set-row set-row-col" id="row-peektime">
+        <div class="s-row-top">
+          <div class="s-txt"><b>限時秒數</b><span>限時模式下自動蓋住嘅時間</span></div>
+          <div class="secs-badge" id="secs-badge">10 秒</div>
+        </div>
+        <div class="range-wrap">
+          <input type="range" id="rng-peeksecs" class="range" min="5" max="60" step="1" value="10">
+          <div class="range-scale"><span>5秒</span><span>60秒</span></div>
+        </div>
+      </div>
+      <div class="set-row">
+        <div class="s-txt"><b>螢幕長開</b><span>傳嚟傳去唔會熄屏</span></div>
+        <div class="toggle" id="tg-wake" onclick="toggleWake()"><div class="knob"></div></div>
+      </div>
+      <div class="set-row">
+        <div class="s-txt"><b>震動回饋</b><span>㩒掣時輕震（部分裝置）</span></div>
+        <div class="toggle on" id="tg-haptic" onclick="toggleHaptic()"><div class="knob"></div></div>
+      </div>
+    </div>
+    <div class="footer-hint">9UP 派對出題機 · 完全離線運作</div>
+    <div class="spacer"></div>
+  </section>
+
+  <!-- ========== HELP ========== -->
+  <section id="screen-help" class="screen">
+    <div class="topbar">
+      <button class="ghost-btn" onclick="go('home')">‹ 返回</button>
+      <div class="brand">📖 玩 法</div>
+    </div>
+    <div class="eyebrow">點樣玩</div>
+    <div class="title-lg">9UP 玩法</div>
+    <div class="title-sub">角色用你副實體卡牌派，部機只係負責出題同開估。</div>
+    <div class="help-body">
+      <div class="step"><div class="s-n">1</div><div class="s-c"><b>派角色</b><p>用實體卡牌分老實人、9up、諗樣等角色。部機唔需要知邊個係邊個。</p></div></div>
+      <div class="step"><div class="s-n">2</div><div class="s-c"><b>揀難度</b><p>大家夾個難度，輕鬆、中等定地獄。</p></div></div>
+      <div class="step"><div class="s-n">3</div><div class="s-c"><b>睇題目</b><p>全場睇同一個詞語同三個方向提示，只有一個方向係真。</p></div></div>
+      <div class="step"><div class="s-n">4</div><div class="s-c"><b>老實人偷睇</b><p>老實人撳實粒掣睇真答案，其他人望開。放手即刻收埋。</p></div></div>
+      <div class="step"><div class="s-n">5</div><div class="s-c"><b>大家 9UP</b><p>老實人睇完，畫面 show 返三個方向畀大家。逐個開始亂up，老實人講真、9up亂up，諗樣現場猜邊個亂噏。</p></div></div>
+      <div class="step"><div class="s-n">6</div><div class="s-c"><b>開估</b><p>諗樣揀好之後㩒開估，滑動解鎖先揭曉，避免手滑。睇真相，計分自己講數。</p></div></div>
+    </div>
+    <div class="step" style="border:none;"><div class="s-n" style="background:var(--mint);">🎯</div><div class="s-c"><b>選角（主頁）</b><p>開波前想用手機分角色，可以喺主頁㩒「選角」，轉手指指定諗樣同老實人。唔想用就直接開始出題。</p></div></div>
+    <button class="btn" onclick="go('home')" style="margin-top:16px;">明喇，開波</button>
+  </section>
+
+</div>
+
+<script>
+/* =========================================================
+   9UPPER — offline party question machine
+   Interface layer. Questions are a placeholder deck for now;
+   real deck + custom-question support wired in later.
+   ========================================================= */
+
+// ---------- question bank ----------
+// Loaded from data/questions.json (see README for schema). Works when the app
+// is served over http(s) — e.g. GitHub Pages. Opening the file directly with
+// file:// blocks fetch (browser CORS), so we surface a clear message and fall
+// back to a tiny built-in sample just so the UI is never empty.
+let BANK = [];                 // the live question list
+let bankState = 'loading';     // 'loading' | 'ready' | 'error'
+
+const FALLBACK_BANK = [
+  {id:0, word:"伊頓混亂", answer:"一款英國經典甜品，由蛋白脆餅、打發忌廉與士多啤梨混合而成；此為離線示例，完整題庫請透過網頁伺服器載入。",
+   hint1:"甜品", hint2:"天氣現象", hint3:"歷史事件", correctHintIndex:1, category:"food"}
+];
+
+async function loadBank(){
+  bankState = 'loading';
+  renderBankStatus();
+  try{
+    const res = await fetch('data/questions.json', {cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const qs = Array.isArray(data.questions) ? data.questions : [];
+    if(!qs.length) throw new Error('empty bank');
+    BANK = qs;
+    bankState = 'ready';
+  }catch(err){
+    // fetch blocked (file://) or file missing — degrade gracefully
+    BANK = FALLBACK_BANK;
+    bankState = 'error';
+  }
+  renderBankStatus();
+}
+
+function renderBankStatus(){
+  const el = document.getElementById('bank-status');
+  if(!el) return;
+  if(bankState==='loading'){ el.className='bank-status'; el.textContent='題庫載入緊…'; }
+  else if(bankState==='ready'){ el.className='bank-status'; el.textContent = BANK.length + ' 條題目已就緒'; }
+  else { el.className='bank-status err'; el.innerHTML='題庫載入唔到，暫用示例題。<br>請用網頁伺服器開啟（例如 GitHub Pages）。'; }
+}
+
+const MODE_META = {
+  none:  {ico:'🙈', name:'冇提示'},
+  hints: {ico:'🧭', name:'有提示'}
+};
+
+// ---------- persisted settings ----------
+const store = {
+  wake:     loadBool("cfg.wake", false),
+  haptic:   loadBool("cfg.haptic", true),
+  peekMode: loadStr("cfg.peekMode", "hold"),   // "hold" = 撳實先睇, "timed" = 限時睇
+  peekSecs: loadInt("cfg.peekSecs", 10),        // auto-hide seconds in timed mode
+};
+function loadBool(k,d){ try{const v=localStorage.getItem(k); return v===null?d:v==="1";}catch(e){return d;} }
+function loadInt(k,d){ try{const v=localStorage.getItem(k); return v===null?d:parseInt(v,10);}catch(e){return d;} }
+function loadStr(k,d){ try{const v=localStorage.getItem(k); return v===null?d:v;}catch(e){return d;} }
+function save(k,v){ try{localStorage.setItem(k, v);}catch(e){} }
+
+// ---------- runtime state ----------
+let state = { mode:'hints', current:null };
+let recentIds = [];            // avoid repeating the last few questions
+
+// ---------- navigation ----------
+const screens = {
+  home:'screen-home', roleSelect:'screen-roleSelect',
+  spinThinker:'screen-spinThinker', spinHonest:'screen-spinHonest',
+  diff:'screen-diff', question:'screen-question',
+  answerGate:'screen-answerGate', answer:'screen-answer',
+  point:'screen-point', revealLock:'screen-revealLock', result:'screen-result',
+  settings:'screen-settings', help:'screen-help'
+};
+function go(name){
+  Object.values(screens).forEach(id=>document.getElementById(id).classList.remove('active'));
+  document.getElementById(screens[name]).classList.add('active');
+  if(name==='settings') syncSettingsUI();
+  if(name==='answerGate') resetGate();
+}
+
+// ---------- haptics ----------
+function buzz(ms){ if(store.haptic && navigator.vibrate){ try{navigator.vibrate(ms);}catch(e){} } }
+
+// ---------- round flow ----------
+function startRound(){ go('diff'); }   // used by 下一題 — role-select already done
+
+// ---------- role select ----------
+// Flow: 選角 → 轉諗樣 → (tap 去老實人) → 轉老實人 → (tap 返主頁).
+// Each spin twirls the finger to a random direction. Advancing is fully manual
+// so nobody gets bounced to the next role before seeing where it landed.
+
+function startRoleFlow(){
+  // reset both hub labels, jump straight into 諗樣's spin screen
+  document.getElementById('pick-thinker-go').textContent = '轉手指 ›';
+  document.getElementById('pick-honest-go').textContent = '轉手指 ›';
+  go('spinThinker');
+}
+
+function spinRole(which){
+  const isThinker = (which==='thinker');
+  const el = document.getElementById(isThinker ? 'arrow-thinker' : 'arrow-honest');
+  if(!el) return;
+  buzz(15);
+  // land on a random angle; add a couple full spins for a fun twirl
+  const base  = Math.floor(Math.random()*360);
+  const spins = (2 + Math.floor(Math.random()*2)) * 360;
+  const prev  = parseInt(el.dataset.acc||'0',10);
+  const nextRot = prev + spins + ((base - (prev%360) + 360)%360);
+  el.dataset.acc = nextRot;
+  el.style.setProperty('--rot', nextRot + 'deg');
+
+  // tick the hub label so people know this role's been assigned
+  const lbl = document.getElementById(isThinker ? 'pick-thinker-go' : 'pick-honest-go');
+  if(lbl) lbl.textContent = '✓ 已轉';
+}
+
+function pickMode(mode){
+  state.mode = mode;
+  buzz(12);
+  drawQuestion();
+  go('question');
+}
+
+function drawQuestion(){
+  const deck = BANK.length ? BANK : FALLBACK_BANK;
+  // pick a random question, avoiding the last few so it doesn't repeat
+  let pool = deck.filter(q => !recentIds.includes(q.id));
+  if(!pool.length) pool = deck;                 // deck smaller than the memory window
+  const q = pool[Math.floor(Math.random()*pool.length)];
+  state.current = q;
+  recentIds.push(q.id);
+  const keep = Math.min(5, Math.max(0, deck.length - 1));
+  while(recentIds.length > keep) recentIds.shift();
+
+  // word + mode badge
+  document.getElementById('q-word').textContent = q.word;
+  const meta = MODE_META[state.mode] || MODE_META.hints;
+  document.getElementById('q-modeico').textContent = meta.ico;
+  document.getElementById('q-modename').textContent = meta.name;
+
+  // hints only in 有提示 mode
+  const hints = document.getElementById('q-hints');
+  if(state.mode === 'hints'){
+    hints.style.display = '';
+    document.getElementById('q-h1').textContent = q.hint1;
+    document.getElementById('q-h2').textContent = q.hint2;
+    document.getElementById('q-h3').textContent = q.hint3;
+  }else{
+    hints.style.display = 'none';
+  }
+}
+
+// ---------- answer peek ----------
+// Two modes (chosen in settings):
+//   hold  — press and hold the button; releasing (or safety timeout) hides instantly
+//   timed — tap "開始睇" once to open; counts down store.peekSecs, then the card
+//           greys out and locks with "夠鐘，準備開始" (no second peek this round)
+let peekCountTimer=null;
+
+function fillAnswer(){
+  const q = state.current; if(!q) return;
+  document.getElementById('ans-word').textContent = q.word;
+  document.getElementById('ans-body').textContent = q.answer;
+  // 真方向 only means something when hints are in play
+  const chip = document.getElementById('ans-truehint');
+  if(state.mode === 'hints'){
+    chip.style.display = '';
+    chip.textContent = '真方向：' + q['hint'+q.correctHintIndex];
+  }else{
+    chip.style.display = 'none';
+  }
+}
+
+// reset the gate every time we arrive, so a spent round starts fresh
+function resetGate(){
+  const btn = document.getElementById('peek-btn');
+  btn.disabled = false;
+  btn.style.display = '';
+  // clear any expired styling left on the answer card
+  document.getElementById('secret-wrap').classList.remove('expired');
+  document.getElementById('expired-overlay').classList.remove('show');
+  updateGateCopy();
+}
+
+function startCountdown(secs, onEnd){
+  const cd = document.getElementById('ans-count');
+  let left = secs;
+  cd.textContent = left;
+  clearInterval(peekCountTimer);
+  peekCountTimer = setInterval(()=>{
+    left--;
+    cd.textContent = Math.max(0,left);
+    if(left<=0){ clearInterval(peekCountTimer); onEnd && onEnd(); }
+  }, 1000);
+}
+
+// --- hold mode ---  (press and hold; release hides)
+function peekStart(e){
+  if(store.peekMode!=='hold') return;
+  if(e && e.preventDefault) e.preventDefault();
+  const q = state.current; if(!q) return;
+  buzz(15);
+  fillAnswer();
+  go('answer');
+  startCountdown(store.peekSecs, peekEnd);     // safety auto-hide even if held down
+}
+function peekEnd(){
+  if(store.peekMode!=='hold') return;
+  clearInterval(peekCountTimer);
+  if(document.getElementById('screen-answer').classList.contains('active')){
+    go('answerGate');                          // released early → back to gate (can retry)
+  }
+}
+
+// --- timed mode ---  (tap to open, auto-lock on expiry)
+function peekTap(){
+  const q = state.current; if(!q) return;
+  buzz(15);
+  fillAnswer();
+  document.getElementById('secret-wrap').classList.remove('expired');
+  document.getElementById('expired-overlay').classList.remove('show');
+  go('answer');
+  startCountdown(store.peekSecs, timedExpire);
+}
+function timedExpire(){
+  buzz([20,60,20]);
+  document.getElementById('ans-count').textContent = 0;
+  document.getElementById('secret-wrap').classList.add('expired');
+  document.getElementById('expired-overlay').classList.add('show');
+  // mark the gate button spent so老實人 can't peek again this round
+  const btn = document.getElementById('peek-btn');
+  btn.disabled = true;
+}
+
+// entry point from the gate button
+function openAnswer(e){
+  if(store.peekMode==='timed'){ peekTap(); }
+  else { peekStart(e); }
+}
+
+function finishPeek(){
+  clearInterval(peekCountTimer);
+  buzz(12);
+  fillPoint();
+  go('point');                                 // → 指認 (shows the 3 directions)
+}
+
+// mirror the question's word (+ 3 hints in 有提示 mode) onto the 9UPing screen
+function fillPoint(){
+  const q = state.current; if(!q) return;
+  document.getElementById('pt-word').textContent = q.word;
+  const hints = document.getElementById('pt-hints');
+  if(state.mode === 'hints'){
+    if(hints) hints.style.display = '';
+    document.getElementById('pt-h1').textContent = q.hint1;
+    document.getElementById('pt-h2').textContent = q.hint2;
+    document.getElementById('pt-h3').textContent = q.hint3;
+  }else{
+    if(hints) hints.style.display = 'none';
+  }
+}
+
+// ---------- reveal slider (slide to unlock) ----------
+(function initSlider(){
+  const slider = document.getElementById('reveal-slider');
+  const knob   = document.getElementById('slider-knob');
+  const fill   = document.getElementById('slider-fill');
+  if(!slider) return;
+  let dragging=false, startX=0, x=0, max=0;
+
+  function geom(){ max = slider.clientWidth - knob.clientWidth - 10; }
+  function setX(v){
+    x = Math.max(0, Math.min(max, v));
+    knob.style.transform = `translateX(${x}px)`;
+    fill.style.width = (knob.clientWidth + x) + 'px';
+  }
+  function down(e){ dragging=true; geom(); startX = (e.touches?e.touches[0].clientX:e.clientX) - x; }
+  function move(e){
+    if(!dragging) return;
+    const cx = (e.touches?e.touches[0].clientX:e.clientX);
+    setX(cx - startX);
+    if(e.cancelable) e.preventDefault();
+  }
+  function up(){
+    if(!dragging) return;
+    dragging=false;
+    if(x >= max-4){ unlockReveal(); resetSlider(); }
+    else{ animateBack(); }
+  }
+  function animateBack(){
+    knob.style.transition='transform .2s'; fill.style.transition='width .2s';
+    setX(0);
+    setTimeout(()=>{knob.style.transition=''; fill.style.transition='';},220);
+  }
+  window.resetSlider = ()=>{ geom(); setX(0); };
+
+  knob.addEventListener('pointerdown', down);
+  window.addEventListener('pointermove', move, {passive:false});
+  window.addEventListener('pointerup', up);
+  window.addEventListener('resize', ()=>{geom(); setX(0);});
+})();
+
+function unlockReveal(){
+  buzz([15,40,15]);
+  const q = state.current; if(!q) return;
+  document.getElementById('res-word').textContent = q.word;
+  document.getElementById('res-answer').textContent = q.answer;
+  // three-direction recap only applies to 有提示 mode
+  const recap = document.getElementById('res-recap');
+  if(state.mode === 'hints'){
+    recap.style.display = '';
+    for(let i=1;i<=3;i++){
+      document.getElementById('recap-t'+i).textContent = q['hint'+i];
+      const row = document.getElementById('recap-'+i);
+      const tag = document.getElementById('recap-tag'+i);
+      const isTrue = (i===q.correctHintIndex);
+      row.classList.toggle('is-true', isTrue);
+      tag.textContent = isTrue ? '✓ 真' : '';
+    }
+  }else{
+    recap.style.display = 'none';
+  }
+  go('result');
+}
+
+// ---------- settings UI ----------
+function syncSettingsUI(){
+  document.getElementById('tg-wake').classList.toggle('on', store.wake);
+  document.getElementById('tg-haptic').classList.toggle('on', store.haptic);
+  document.querySelectorAll('#seg-peekmode button').forEach(b=>{
+    b.classList.toggle('on', b.dataset.v===store.peekMode);
+  });
+  // range slider + live badge
+  const rng = document.getElementById('rng-peeksecs');
+  rng.value = store.peekSecs;
+  document.getElementById('secs-badge').textContent = store.peekSecs + ' 秒';
+  // 限時秒數 only matters in timed mode — dim it otherwise
+  document.getElementById('row-peektime').classList.toggle('disabled', store.peekMode!=='timed');
+}
+function toggleWake(){
+  store.wake = !store.wake; save('cfg.wake', store.wake?'1':'0');
+  document.getElementById('tg-wake').classList.toggle('on', store.wake);
+  applyWakeLock();
+  buzz(10);
+}
+function toggleHaptic(){
+  store.haptic = !store.haptic; save('cfg.haptic', store.haptic?'1':'0');
+  document.getElementById('tg-haptic').classList.toggle('on', store.haptic);
+  buzz(10);
+}
+document.getElementById('seg-peekmode').addEventListener('click', (e)=>{
+  const b = e.target.closest('button'); if(!b) return;
+  store.peekMode = b.dataset.v; save('cfg.peekMode', store.peekMode);
+  syncSettingsUI(); buzz(10); updateGateCopy();
+});
+// range slider: update live badge as it drags, persist on the way
+document.getElementById('rng-peeksecs').addEventListener('input', (e)=>{
+  store.peekSecs = parseInt(e.target.value,10);
+  document.getElementById('secs-badge').textContent = store.peekSecs + ' 秒';
+  save('cfg.peekSecs', store.peekSecs);
+  updateGateCopy();
+});
+document.getElementById('rng-peeksecs').addEventListener('change', ()=>buzz(10));
+
+// gate screen copy adapts to the current peek mode
+function updateGateCopy(){
+  const btn = document.getElementById('peek-btn');
+  const desc = document.getElementById('gate-desc');
+  const head = document.getElementById('gate-head');
+  const badge = document.getElementById('gate-timebadge');
+  const badgeVal = document.getElementById('gate-timeval');
+  if(!btn) return;
+  if(store.peekMode==='timed'){
+    btn.textContent = '準備好，開始睇 →';
+    head.textContent = '淨係老實人先好㩒';
+    desc.innerHTML = '其他人請望開螢幕。<br>㩒「開始睇」就即刻倒數，夠鐘會蓋返，冇得再睇。';
+    badge.classList.remove('hidden');
+    badgeVal.textContent = store.peekSecs;
+  }else{
+    btn.textContent = '撳實睇答案';
+    head.textContent = '淨係老實人先好㩒';
+    desc.innerHTML = '其他人請望開螢幕。<br>撳實下面粒掣先睇到真答案，放手就即刻收埋。';
+    badge.classList.add('hidden');
+  }
+}
+
+// ---------- wake lock ----------
+let wakeSentinel=null;
+async function applyWakeLock(){
+  try{
+    if(store.wake && 'wakeLock' in navigator){
+      wakeSentinel = await navigator.wakeLock.request('screen');
+    }else if(wakeSentinel){
+      await wakeSentinel.release(); wakeSentinel=null;
+    }
+  }catch(e){/* not supported / denied */}
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && store.wake) applyWakeLock();
+});
+
+// ---------- boot ----------
+syncSettingsUI();
+updateGateCopy();
+applyWakeLock();
+loadBank();          // fetch data/questions.json (falls back gracefully)
+</script>
+</body>
+</html>
