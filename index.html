@@ -137,29 +137,6 @@
   .home-mini .btn{font-size:16px; padding:15px;}
 
   /* ============ DIFFICULTY ============ */
-  .diff-grid{display:flex; flex-direction:column; gap:16px; margin:6px 0;}
-  .diff-card{
-    appearance:none; font-family:inherit; cursor:pointer; text-align:left;
-    border:1px solid var(--line); border-radius:var(--r-md);
-    background:var(--ink-2); color:var(--cream);
-    padding:22px 24px; display:flex; align-items:center; gap:20px;
-    transition:transform .08s, border-color .15s, background .15s;
-    position:relative; overflow:hidden;
-  }
-  .diff-card:active{transform:scale(.98);}
-  .diff-card .pips{font-size:30px; letter-spacing:4px; width:120px;}
-  .diff-card .d-txt{flex:1;}
-  .diff-card .d-txt b{display:block; font-size:27px; font-weight:900; margin-bottom:3px;}
-  .diff-card .d-txt span{font-size:14px; color:var(--muted);}
-  .diff-card .d-arrow{font-size:26px; color:var(--muted);}
-  .diff-card[data-m="none"]{--gl:var(--gold);}
-  .diff-card[data-m="hints"]{--gl:var(--mint);}
-  .diff-card::before{content:""; position:absolute; left:0; top:0; bottom:0; width:6px; background:var(--gl);}
-  .diff-card .pips{color:var(--gl);}
-  .diff-card .mode-ico{font-size:40px; width:120px; text-align:center;}
-  /* bank load status (loading / failed) on the mode screen */
-  .bank-status{text-align:center; color:var(--muted); font-size:14px; margin-top:18px; line-height:1.6; min-height:20px;}
-  .bank-status.err{color:var(--gold);}
 
   /* ============ QUESTION ============ */
   .q-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:auto;}
@@ -224,17 +201,22 @@
     letter-spacing:.05em; margin:14px 0;
   }
   .ans-center{
-    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
-    text-align:center; gap:18px;
+    flex:1; min-height:0; display:flex; flex-direction:column; align-items:center;
+    justify-content:flex-start; text-align:center; gap:14px;
+    overflow-y:auto; padding:4px 2px; width:100%;
   }
-  .ans-word{font-size:20px; color:var(--muted); font-weight:700; letter-spacing:.3em;}
+  .ans-word{
+    font-size:clamp(30px,8vw,44px); color:var(--cream); font-weight:900;
+    letter-spacing:.04em; margin-top:6px;
+  }
   .ans-body{
-    font-size:clamp(30px,9vw,46px); font-weight:900; line-height:1.2; color:var(--cream);
+    font-size:clamp(16px,4.4vw,20px); font-weight:600; line-height:1.7; color:var(--cream);
+    text-align:left; max-width:34ch; letter-spacing:.01em;
   }
   .ans-truehint{
     font-size:15px; color:var(--mint); font-weight:800; letter-spacing:.06em;
     background:rgba(0,191,255,.12); border:1px solid rgba(0,191,255,.35);
-    padding:8px 16px; border-radius:999px;
+    padding:8px 16px; border-radius:999px; flex:none;
   }
   .countdown{
     position:absolute; top:20px; right:22px; font-size:34px; font-weight:900;
@@ -373,7 +355,7 @@
   .spin-finger.b{filter:drop-shadow(0 12px 26px rgba(255,204,0,.5));}
 
   /* ============ SETTINGS ============ */
-  .set-list{display:flex; flex-direction:column; gap:14px; margin-top:6px;}
+  .set-list{display:flex; flex-direction:column; gap:14px; margin-top:6px; flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-right:4px;}
   .set-row{
     display:flex; align-items:center; justify-content:space-between; gap:16px;
     background:var(--ink-2); border:1px solid var(--line);
@@ -535,36 +517,10 @@
     <button class="btn mint" id="spin-honest-next" onclick="go('home')" style="margin-top:12px;">搞掂，返主頁 →</button>
   </section>
 
-  <!-- ========== DIFFICULTY ========== -->
-  <section id="screen-diff" class="screen">
-    <div class="topbar">
-      <button class="ghost-btn" onclick="go('home')">‹ 返回</button>
-      <div class="brand"><b>9UP</b> PARTY</div>
-    </div>
-    <div class="eyebrow">新一題</div>
-    <div class="title-lg">揀個模式</div>
-    <div class="title-sub">大家夾定玩邊個，任何人都可以㩒。</div>
-    <div class="diff-grid">
-      <button class="diff-card" data-m="none" onclick="pickMode('none')">
-        <div class="mode-ico">🙈</div>
-        <div class="d-txt"><b>冇提示</b><span>淨係得個怪詞，靠亂噏</span></div>
-        <div class="d-arrow">›</div>
-      </button>
-      <button class="diff-card" data-m="hints" onclick="pickMode('hints')">
-        <div class="mode-ico">🧭</div>
-        <div class="d-txt"><b>有提示</b><span>三個方向，一真兩假</span></div>
-        <div class="d-arrow">›</div>
-      </button>
-    </div>
-    <!-- shown while the bank is still loading / if it failed -->
-    <div class="bank-status" id="bank-status"></div>
-    <div class="spacer"></div>
-  </section>
-
   <!-- ========== QUESTION ========== -->
   <section id="screen-question" class="screen">
     <div class="q-head">
-      <button class="ghost-btn" onclick="go('diff')">‹ 模式</button>
+      <button class="ghost-btn" onclick="go('home')">‹ 返回</button>
       <div class="q-diffbadge"><span id="q-modeico">🧭</span> <span id="q-modename">有提示</span></div>
     </div>
     <div class="q-body">
@@ -594,10 +550,7 @@
       <p id="gate-desc">其他人請望開螢幕。<br>撳實下面粒掣先睇到真答案，放手就即刻收埋。</p>
       <div class="gate-timebadge hidden" id="gate-timebadge"><b id="gate-timeval">10</b><span>秒睇答案</span></div>
     </div>
-    <button class="btn" id="peek-btn"
-      onpointerdown="openAnswer(event)" onpointerup="peekEnd()" onpointercancel="peekEnd()" onpointerleave="peekEnd()">
-      撳實睇答案
-    </button>
+    <button class="btn" id="peek-btn">撳實睇答案</button>
   </section>
 
   <!-- ========== ANSWER (visible while holding / timed) ========== -->
@@ -690,6 +643,15 @@
     <div class="set-list">
       <div class="set-row set-row-col">
         <div class="s-row-top">
+          <div class="s-txt"><b>提示模式</b><span>出題時畀唔畀三個方向提示</span></div>
+        </div>
+        <div class="seg seg-wide" id="seg-hintmode">
+          <button data-v="none" class="on">冇提示</button>
+          <button data-v="hints">有提示</button>
+        </div>
+      </div>
+      <div class="set-row set-row-col">
+        <div class="s-row-top">
           <div class="s-txt"><b>老實人睇答案</b><span>選擇偷睇答案嘅方式</span></div>
         </div>
         <div class="seg seg-wide" id="seg-peekmode">
@@ -779,14 +741,6 @@ async function loadBank(){
     // fetch blocked (file://) or file missing — the embedded bank stays in use
     bankState = 'ready';
   }
-  renderBankStatus();
-}
-
-function renderBankStatus(){
-  const el = document.getElementById('bank-status');
-  if(!el) return;
-  el.className = 'bank-status';
-  el.textContent = BANK.length + ' 條題目已就緒';
 }
 
 const MODE_META = {
@@ -798,6 +752,7 @@ const MODE_META = {
 const store = {
   wake:     loadBool("cfg.wake", false),
   haptic:   loadBool("cfg.haptic", true),
+  hintMode: loadStr("cfg.hintMode", "none"),   // "none" = 冇提示, "hints" = 有提示
   peekMode: loadStr("cfg.peekMode", "hold"),   // "hold" = 撳實先睇, "timed" = 限時睇
   peekSecs: loadInt("cfg.peekSecs", 10),        // auto-hide seconds in timed mode
 };
@@ -807,14 +762,14 @@ function loadStr(k,d){ try{const v=localStorage.getItem(k); return v===null?d:v;
 function save(k,v){ try{localStorage.setItem(k, v);}catch(e){} }
 
 // ---------- runtime state ----------
-let state = { mode:'hints', current:null };
+let state = { mode: store.hintMode, current:null };
 let recentIds = [];            // avoid repeating the last few questions
 
 // ---------- navigation ----------
 const screens = {
   home:'screen-home', roleSelect:'screen-roleSelect',
   spinThinker:'screen-spinThinker', spinHonest:'screen-spinHonest',
-  diff:'screen-diff', question:'screen-question',
+  question:'screen-question',
   answerGate:'screen-answerGate', answer:'screen-answer',
   point:'screen-point', revealLock:'screen-revealLock', result:'screen-result',
   settings:'screen-settings', help:'screen-help'
@@ -830,7 +785,12 @@ function go(name){
 function buzz(ms){ if(store.haptic && navigator.vibrate){ try{navigator.vibrate(ms);}catch(e){} } }
 
 // ---------- round flow ----------
-function startRound(){ go('diff'); }   // used by 下一題 — role-select already done
+// 開始出題 / 下一題 — mode comes from settings (store.hintMode), draw and show
+function startRound(){
+  buzz(12);
+  drawQuestion();
+  go('question');
+}
 
 // ---------- role select ----------
 // Flow: 選角 → 轉諗樣 → (tap 去老實人) → 轉老實人 → (tap 返主頁).
@@ -862,14 +822,8 @@ function spinRole(which){
   if(lbl) lbl.textContent = '✓ 已轉';
 }
 
-function pickMode(mode){
-  state.mode = mode;
-  buzz(12);
-  drawQuestion();
-  go('question');
-}
-
 function drawQuestion(){
+  state.mode = store.hintMode;                  // mode set in settings
   const deck = BANK.length ? BANK : EMBEDDED_BANK;
   // pick a random question, avoiding the last few so it doesn't repeat
   let pool = deck.filter(q => !recentIds.includes(q.id));
@@ -924,10 +878,37 @@ function resetGate(){
   const btn = document.getElementById('peek-btn');
   btn.disabled = false;
   btn.style.display = '';
-  // clear any expired styling left on the answer card
   document.getElementById('secret-wrap').classList.remove('expired');
   document.getElementById('expired-overlay').classList.remove('show');
+  clearInterval(peekCountTimer);
   updateGateCopy();
+  bindPeekButton();          // (re)wire handlers for the current peek mode
+}
+
+// Wire the peek button for exactly one mode, removing the other mode's handlers.
+// hold  = press & hold (pointerdown opens, release closes), NO timer.
+// timed = single tap (click opens), countdown runs, NO holding.
+function bindPeekButton(){
+  const btn = document.getElementById('peek-btn');
+  if(!btn) return;
+  // clone to drop every previously-attached listener, then re-grab
+  const fresh = btn.cloneNode(true);
+  btn.parentNode.replaceChild(fresh, btn);
+  const b = document.getElementById('peek-btn');
+
+  if(store.peekMode === 'timed'){
+    // tap once — no hold, no preventDefault needed
+    b.addEventListener('click', ()=>{ if(!b.disabled) peekTap(); });
+  }else{
+    // press and hold
+    b.addEventListener('pointerdown', peekStart);
+    b.addEventListener('pointerup', peekEnd);
+    b.addEventListener('pointercancel', peekEnd);
+    b.addEventListener('pointerleave', peekEnd);
+    // stop the synthetic click / context menu from firing after a hold
+    b.addEventListener('click', (e)=>e.preventDefault());
+    b.addEventListener('contextmenu', (e)=>e.preventDefault());
+  }
 }
 
 function startCountdown(secs, onEnd){
@@ -950,6 +931,8 @@ function peekStart(e){
   buzz(15);
   fillAnswer();
   document.getElementById('ans-count').textContent = '';   // no countdown in hold mode
+  document.getElementById('secret-wrap').classList.remove('expired');
+  document.getElementById('expired-overlay').classList.remove('show');
   go('answer');
 }
 function peekEnd(){
@@ -959,7 +942,7 @@ function peekEnd(){
   }
 }
 
-// --- timed mode ---  (tap to open, auto-lock on expiry)
+// --- timed mode ---  (tap to open, auto-lock on expiry — NO holding)
 function peekTap(){
   const q = state.current; if(!q) return;
   buzz(15);
@@ -974,22 +957,13 @@ function timedExpire(){
   document.getElementById('ans-count').textContent = 0;
   document.getElementById('secret-wrap').classList.add('expired');
   document.getElementById('expired-overlay').classList.add('show');
-  // mark the gate button spent so老實人 can't peek again this round
-  const btn = document.getElementById('peek-btn');
-  btn.disabled = true;
-}
-
-// entry point from the gate button
-function openAnswer(e){
-  if(store.peekMode==='timed'){ peekTap(); }
-  else { peekStart(e); }
 }
 
 function finishPeek(){
   clearInterval(peekCountTimer);
   buzz(12);
   fillPoint();
-  go('point');                                 // → 指認 (shows the 3 directions)
+  go('point');                                 // → 9UPing
 }
 
 // mirror the question's word (+ 3 hints in 有提示 mode) onto the 9UPing screen
@@ -1074,6 +1048,9 @@ function unlockReveal(){
 function syncSettingsUI(){
   document.getElementById('tg-wake').classList.toggle('on', store.wake);
   document.getElementById('tg-haptic').classList.toggle('on', store.haptic);
+  document.querySelectorAll('#seg-hintmode button').forEach(b=>{
+    b.classList.toggle('on', b.dataset.v===store.hintMode);
+  });
   document.querySelectorAll('#seg-peekmode button').forEach(b=>{
     b.classList.toggle('on', b.dataset.v===store.peekMode);
   });
@@ -1095,6 +1072,11 @@ function toggleHaptic(){
   document.getElementById('tg-haptic').classList.toggle('on', store.haptic);
   buzz(10);
 }
+document.getElementById('seg-hintmode').addEventListener('click', (e)=>{
+  const b = e.target.closest('button'); if(!b) return;
+  store.hintMode = b.dataset.v; save('cfg.hintMode', store.hintMode);
+  syncSettingsUI(); buzz(10);
+});
 document.getElementById('seg-peekmode').addEventListener('click', (e)=>{
   const b = e.target.closest('button'); if(!b) return;
   store.peekMode = b.dataset.v; save('cfg.peekMode', store.peekMode);
