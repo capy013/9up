@@ -466,8 +466,20 @@
   .range-scale{display:flex; justify-content:space-between; color:var(--muted); font-size:12px; font-weight:700; margin-top:6px;}
 
   /* ============ HELP ============ */
-  .help-body{overflow-y:auto; -webkit-overflow-scrolling:touch; padding-right:4px; flex:1;}
-  .help-body::-webkit-scrollbar{width:0;}
+  /* the help SCREEN itself scrolls (no nested scroll box — that caused paint
+     artifacts on some mobile browsers). Content flows: title → steps → button. */
+  #screen-help{
+    overflow-y:auto; -webkit-overflow-scrolling:touch;
+    transform:translateZ(0);            /* own paint layer → no scroll trails */
+    isolation:isolate;
+  }
+  #screen-help::-webkit-scrollbar{width:0;}
+  /* keep the top bar visible while the guide scrolls under it */
+  #screen-help .topbar{
+    position:sticky; top:0; z-index:2; background:var(--ink);
+    padding-bottom:8px; margin-bottom:2px;
+  }
+  .help-scroll{ display:flex; flex-direction:column; }
   .step{
     display:flex; gap:16px; padding:16px 0; border-bottom:1px solid var(--line);
   }
@@ -549,7 +561,7 @@
     #screen-home .home-actions,
     #screen-roleSelect .btn,
     #screen-settings .set-list,
-    #screen-help .help-body{
+    #screen-help .help-scroll{
       max-width:560px; margin-left:auto; margin-right:auto; width:100%;
     }
     /* home action buttons sit in a row when there's width */
@@ -562,9 +574,6 @@
     #screen-answerGate .gate h2{ font-size:22px; margin-bottom:0; }
     #screen-answerGate .gate p{ font-size:14px; }
     #screen-answerGate .gate-timebadge{ margin-top:4px; }
-
-    /* let tall list screens scroll inside the shell instead of clipping */
-    #screen-help .help-body{ flex:1 1 auto; min-height:0; overflow-y:auto; }
 
     /* --- ROLE SELECT: compact everything so intro + cards + button fit --- */
     #screen-roleSelect .role-intro{ margin-bottom:2px; }
@@ -868,19 +877,19 @@
       <button class="ghost-btn" onclick="go('home')">‹ 返回</button>
       <div class="brand">📖 玩 法</div>
     </div>
-    <div class="eyebrow">點樣玩</div>
-    <div class="title-lg">9UP 玩法</div>
-    <div class="title-sub">角色用你副實體卡牌派，部機淨係負責出題、俾老實人偷睇答案同開估。</div>
-    <div class="help-body">
+    <div class="help-scroll">
+      <div class="eyebrow">點樣玩</div>
+      <div class="title-lg">9UP 玩法</div>
+      <div class="title-sub">角色用你副實體卡牌派，部機淨係負責出題、俾老實人偷睇答案同開估。</div>
       <div class="step"><div class="s-n">1</div><div class="s-c"><b>派角色</b><p>用實體卡牌分老實人、9up、諗樣。老實人係唯一知道真答案嗰個，9up要靠亂噏，諗樣負責猜邊個亂噏。部機唔需要知邊個係邊個。</p></div></div>
       <div class="step"><div class="s-n">2</div><div class="s-c"><b>出題</b><p>喺主頁㩒「開始出題」，全場睇同一個題目詞語。右上角可以㩒一下切換「有提示／冇提示」：有提示會多俾三個方向（一真兩假），冇提示就淨係得個詞。</p></div></div>
       <div class="step"><div class="s-n">3</div><div class="s-c"><b>老實人偷睇答案</b><p>㩒「老實人睇答案」，由老實人一個人睇真相，其他人望開。可喺設定揀「撳實先睇」（放手即收）或「限時睇」（㩒一下、夠鐘自動收）。</p></div></div>
       <div class="step"><div class="s-n">4</div><div class="s-c"><b>大家 9UP</b><p>老實人睇完，畫面顯示題目（有提示模式仲會顯示三個方向）。跟住逐個開始亂up：老實人講真、9up亂噏，令諗樣分唔到邊個先係真。</p></div></div>
       <div class="step"><div class="s-n">5</div><div class="s-c"><b>諗樣猜人</b><p>大家講完，諗樣估邊個係亂噏嘅9up。呢一步喺現場口頭／指人進行，部機唔參與。</p></div></div>
       <div class="step"><div class="s-n">6</div><div class="s-c"><b>開估</b><p>㩒「開估」，滑動解鎖先揭曉真答案（避免手滑）。有提示模式仲會標示邊個方向先係真。點樣計分由你哋自己講數。</p></div></div>
+      <div class="step" style="border:none;"><div class="s-n" style="background:var(--mint);">🎯</div><div class="s-c"><b>選角工具（主頁）</b><p>想用手機幫手分角色，可以喺主頁㩒「選角」，轉手指分別指定諗樣同老實人。唔想用就照樣用實體牌分。</p></div></div>
+      <button class="btn" onclick="go('home')" style="margin-top:8px;">明喇，開波</button>
     </div>
-    <div class="step" style="border:none;"><div class="s-n" style="background:var(--mint);">🎯</div><div class="s-c"><b>選角工具（主頁）</b><p>想用手機幫手分角色，可以喺主頁㩒「選角」，轉手指分別指定諗樣同老實人。唔想用就照樣用實體牌分。</p></div></div>
-    <button class="btn" onclick="go('home')" style="margin-top:16px;">明喇，開波</button>
   </section>
 
 </div>
