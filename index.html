@@ -483,7 +483,133 @@
 
   .title-lg{font-size:32px; font-weight:900; letter-spacing:.02em; margin:2px 0 4px;}
   .title-sub{color:var(--muted); font-size:14px; margin-bottom:18px; line-height:1.5;}
-</style>
+
+  /* =====================================================================
+     LANDSCAPE (打橫) — real two-column layouts, NOT a scaled portrait.
+     Only applies when the screen is wider than tall. Portrait is untouched.
+     ===================================================================== */
+  @media (orientation:landscape){
+    /* widen the shell so columns have room; keep it from going edge-to-edge */
+    #app{ max-width:960px; padding-left:32px; padding-right:32px; }
+    /* last-resort safety: if a screen truly can't fit a very short landscape,
+       let it scroll rather than clip or overlap (portrait never hits this) */
+    .screen{ overflow-y:auto; }
+
+    /* --- QUESTION & 9UPING: title on the left, hints on the right --- */
+    #screen-question .q-body,
+    #screen-point .q-body{
+      flex-direction:row; align-items:center; justify-content:center;
+      gap:32px; overflow:hidden;
+    }
+    #screen-question .q-body > .q-center,
+    #screen-point .q-body > .q-center{
+      flex:1 1 0; margin:0; min-width:0;   /* left column: the word */
+    }
+    #screen-question .q-body > .hints,
+    #screen-point .q-body > .hints{
+      flex:1 1 0; margin:0; padding-top:0; border-top:none; min-width:0;
+      max-width:440px; align-self:center;  /* right column: the 3 directions */
+    }
+    /* in landscape the word can be a touch smaller so both columns balance */
+    #screen-question .q-word{ font-size:clamp(44px,9vw,78px); }
+    #screen-point .pt-word{ font-size:clamp(38px,7.5vw,64px); }
+    /* 9UPing heading takes less vertical room */
+    #screen-point .point-head{ margin-bottom:2px; }
+    #screen-point .point-head h2{ font-size:22px; }
+
+    /* --- ANSWER (老實人睇答案): wider card, word left / text right --- */
+    #screen-answer .ans-center{
+      flex-direction:row; align-items:center; justify-content:center;
+      gap:28px; text-align:left; overflow-y:auto;
+    }
+    #screen-answer .ans-word{
+      flex:0 0 auto; max-width:38%; margin:0; text-align:center;
+      font-size:clamp(28px,6vw,44px);
+    }
+    #screen-answer .ans-body{ flex:1 1 0; min-width:0; max-width:none; }
+    #screen-answer .ans-truehint{ align-self:flex-start; }
+
+    /* --- RESULT (開估): word + celebration left, answer + recap right --- */
+    #screen-result .result-wrap{
+      flex-direction:row; align-items:flex-start; justify-content:center;
+      gap:32px; text-align:left; flex-wrap:wrap;
+    }
+    #screen-result .result-burst{ order:0; }
+    #screen-result .result-word{
+      flex:1 1 40%; min-width:200px; text-align:center; align-self:center;
+    }
+    #screen-result .result-answer{ flex:1 1 45%; min-width:240px; max-width:none; }
+    #screen-result .recap-hints{ flex:1 1 100%; }
+
+    /* --- LIST-STYLE screens: just breathe in the wider shell, stay centred --- */
+    #screen-home .logo-wrap{ margin-top:2vh; }
+    /* short landscape: shrink the logo so logo + buttons fit without scrolling */
+    #screen-home .logo-num{ font-size:clamp(64px,12vh,120px); }
+    #screen-home .logo-sub{ font-size:20px; margin:2px 0 2px 8px; }
+    #screen-home .home-actions,
+    #screen-roleSelect .btn,
+    #screen-settings .set-list,
+    #screen-help .help-body{
+      max-width:560px; margin-left:auto; margin-right:auto; width:100%;
+    }
+    /* home action buttons sit in a row when there's width */
+    #screen-home .home-actions{ flex-direction:row; flex-wrap:wrap; gap:12px; margin-top:18px; }
+    #screen-home .home-actions .btn{ flex:1 1 40%; }
+
+    /* answer-gate: compact the secret prompt so it fits short landscape */
+    #screen-answerGate .gate{ padding:0; gap:10px; }
+    #screen-answerGate .gate-icon{ font-size:40px; margin-bottom:0; }
+    #screen-answerGate .gate h2{ font-size:22px; margin-bottom:0; }
+    #screen-answerGate .gate p{ font-size:14px; }
+    #screen-answerGate .gate-timebadge{ margin-top:4px; }
+
+    /* let tall list screens scroll inside the shell instead of clipping */
+    #screen-help .help-body{ flex:1 1 auto; min-height:0; overflow-y:auto; }
+
+    /* --- ROLE SELECT: compact everything so intro + cards + button fit --- */
+    #screen-roleSelect .role-intro{ margin-bottom:2px; }
+    #screen-roleSelect .role-intro .eyebrow{ display:none; }
+    #screen-roleSelect .role-intro .title-lg{ font-size:24px; }
+    #screen-roleSelect .role-intro .title-sub{ margin:4px 0 8px; font-size:12px; }
+    #screen-roleSelect .role-cards{ flex-direction:row; gap:12px; }
+    #screen-roleSelect .role-cards .role-pick{ flex:1 1 0; flex-direction:column; text-align:center; gap:4px; padding:12px 12px; }
+    #screen-roleSelect .role-pick .rc-emoji{ font-size:32px; }
+    #screen-roleSelect .role-pick .rc-name b{ font-size:20px; }
+    #screen-roleSelect .role-pick .rc-name span{ font-size:11px; }
+    #screen-roleSelect .role-pick .rc-name{ flex:none; }
+    #screen-roleSelect .role-pick .rc-go{ font-size:13px; }
+
+    /* --- SPIN (轉手指): finger scales to available height; head + buttons compact --- */
+    #screen-spinThinker .spin-head,
+    #screen-spinHonest .spin-head{ margin-top:0; }
+    #screen-spinThinker .spin-emoji,
+    #screen-spinHonest .spin-emoji{ font-size:30px; margin-bottom:0; }
+    #screen-spinThinker .spin-title,
+    #screen-spinHonest .spin-title{ font-size:22px; }
+    #screen-spinThinker .spin-sub,
+    #screen-spinHonest .spin-sub{ font-size:12px; margin-top:2px; }
+    #screen-spinThinker .spin-stage,
+    #screen-spinHonest .spin-stage{ padding:2px 0; overflow:hidden; }
+    /* finger sized to fit the stage row, capped so it never spills onto the buttons */
+    #screen-spinThinker .spin-finger,
+    #screen-spinHonest .spin-finger{ font-size:clamp(70px, 22vh, 150px); }
+    /* two spin buttons share one row to save vertical space */
+    #screen-spinThinker,
+    #screen-spinHonest{ }
+    #screen-spinThinker > .btn,
+    #screen-spinHonest > .btn{ margin-top:8px !important; padding:14px; font-size:18px; }
+
+    /* keep primary buttons from stretching absurdly wide on content screens */
+    #screen-question > .btn,
+    #screen-point > .btn,
+    #screen-answer > .btn,
+    #screen-result > .btn,
+    #screen-result > .btn.ghost,
+    #screen-answerGate > .btn,
+    #screen-answerGate > #gate-next-btn{
+      max-width:560px; margin-left:auto; margin-right:auto; width:100%;
+    }
+  }</style>
 </head>
 <body>
 <div id="app">
