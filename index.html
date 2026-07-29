@@ -401,7 +401,7 @@
   }
   .spin-finger{
     font-size:clamp(150px, 46vw, 220px); line-height:1;
-    transition:transform .5s cubic-bezier(.15,.85,.25,1.05);
+    transition:transform 1.15s cubic-bezier(.17,.67,.21,1);
     transform:rotate(var(--rot,0deg));
   }
   .spin-finger.a{filter:drop-shadow(0 12px 26px rgba(0,191,255,.5));}
@@ -987,11 +987,24 @@ function spinRole(which){
   const el = document.getElementById(isThinker ? 'arrow-thinker' : 'arrow-honest');
   if(!el) return;
   buzz(15);
-  // land on a random angle; add a couple full spins for a fun twirl
-  const base  = Math.floor(Math.random()*360);
-  const spins = (2 + Math.floor(Math.random()*2)) * 360;
-  const prev  = parseInt(el.dataset.acc||'0',10);
-  const nextRot = prev + spins + ((base - (prev%360) + 360)%360);
+
+  const prev = parseInt(el.dataset.acc||'0', 10);
+  const prevAngle = ((prev % 360) + 360) % 360;
+
+  // pick a NEW landing angle that's meaningfully far from where it is now,
+  // so consecutive spins clearly point somewhere different (never "same person")
+  let target = Math.floor(Math.random()*360);
+  let tries = 0;
+  while(Math.min(Math.abs(target-prevAngle), 360-Math.abs(target-prevAngle)) < 70 && tries < 20){
+    target = Math.floor(Math.random()*360);
+    tries++;
+  }
+
+  // several full turns for a lively twirl (4–6), plus the delta to reach target
+  const spins = (4 + Math.floor(Math.random()*3)) * 360;
+  const delta = ((target - prevAngle) + 360) % 360;
+  const nextRot = prev + spins + delta;
+
   el.dataset.acc = nextRot;
   el.style.setProperty('--rot', nextRot + 'deg');
 
