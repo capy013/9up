@@ -9,7 +9,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="9UP">
-<meta name="description" content="9UP 派對出題機 — 完全離線嘅瞎掰派對遊戲，300 題冷知識任你玩。">
+<meta name="description" content="9UP 派對出題機 — 完全離線嘅瞎掰派對遊戲，500 題冷知識任你玩。">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <title>9UP · 派對出題機</title>
 <style>
   /* ============ DESIGN TOKENS ============
@@ -1360,6 +1363,14 @@ syncSettingsUI();
 updateGateCopy();
 applyWakeLock();
 loadBank();          // fetch data/questions.json (falls back gracefully)
+
+// register the service worker so the app is installable + works offline.
+// only runs over http(s) (e.g. GitHub Pages); silently skipped on file://.
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {/* offline / unsupported */});
+  });
+}
 </script>
 </body>
 </html>
