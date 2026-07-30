@@ -174,9 +174,9 @@
   /* ============ DIFFICULTY ============ */
 
   /* ============ QUESTION ============ */
-  .q-head{display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:auto; gap:10px;}
-  /* right side of the header: mode toggle on top, 換題目 aligned right under it */
-  .q-head-right{ display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+  .q-head{display:flex; align-items:flex-start; justify-content:space-between; gap:10px;}
+  /* right side of the header: mode toggle + 換題目 side by side (saves vertical room) */
+  .q-head-right{ display:flex; flex-direction:row; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
   .q-diffbadge{
     display:inline-flex; align-items:center; gap:7px; font-size:13px; font-weight:800;
     letter-spacing:.1em; color:var(--muted); border:1px solid var(--line);
@@ -192,20 +192,19 @@
     font-size:12px; color:var(--mint); font-weight:900; margin-left:1px;
     opacity:.85;
   }
-  /* growable wrapper for the word (+ hints). Uses flex-start + auto margins so a
-     short screen scrolls or pushes down instead of overlapping the heading above. */
+  /* Keep the word+hints anchored toward the TOP with a small, fixed offset — not
+     centred in the whole column (which left a huge void on tall screens). Any leftover
+     space just sits at the bottom naturally. On short screens it can scroll. */
   .q-body{
     flex:1 1 auto; min-height:0; width:100%;
     display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
     gap:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    padding-top:clamp(8px, 2.5vh, 28px);
   }
-  .q-body > *:first-child{ margin-top:auto; }
-  .q-body > *:last-child{ margin-bottom:auto; }
-  /* 冇提示模式：hints 隱藏咗，剩返題目，要真正垂直置中（唔好靠 auto-margin，
-     因為隱藏咗嘅 hints 仍然係 DOM last-child，會令題目被推到底）*/
-  .q-body.no-hints{ justify-content:center; }
-  .q-body.no-hints > *:first-child{ margin-top:0; }
-  .q-body.no-hints > *:last-child{ margin-bottom:0; }
+  .q-body > *:first-child{ margin-top:0; }
+  .q-body > *:last-child{ margin-bottom:0; }
+  /* 冇提示模式：hints 隱藏咗，剩返題目 —— 置中好啲（得一件嘢，靠上會太寡） */
+  .q-body.no-hints{ justify-content:center; padding-top:0; }
   .q-center{
     display:flex; flex-direction:column; align-items:center;
     justify-content:center; text-align:center; padding:10px 0;
@@ -229,17 +228,17 @@
   .pt-word-wrap{ display:flex; justify-content:center; }
   /* clear visual break between the word block and the hints */
   .hints{
-    display:flex; flex-direction:column; gap:11px; width:100%;
-    margin:30px 0 0; padding-top:26px; border-top:1px solid var(--line);
+    display:flex; flex-direction:column; gap:9px; width:100%;
+    margin:18px 0 0; padding-top:16px; border-top:1px solid var(--line);
   }
   .hint-title{
     text-align:center; font-size:12px; letter-spacing:.34em; color:var(--muted);
-    font-weight:700; margin-bottom:6px;
+    font-weight:700; margin-bottom:4px;
   }
   .hint{
     display:flex; align-items:center; justify-content:center; gap:16px;
     background:var(--ink-2); border:1px solid var(--line);
-    border-radius:var(--r-sm); padding:15px 20px;
+    border-radius:var(--r-sm); padding:12px 20px;
   }
   /* hints ease in one after another when the question screen becomes active */
   .screen.active #q-hints .hint{ animation:riseIn .34s ease both; }
@@ -593,9 +592,10 @@
     #screen-help .help-scroll{
       max-width:560px; margin-left:auto; margin-right:auto; width:100%;
     }
-    /* home action buttons sit in a row when there's width */
-    #screen-home .home-actions{ flex-direction:row; flex-wrap:wrap; gap:12px; margin-top:18px; }
-    #screen-home .home-actions .btn{ flex:1 1 40%; }
+    /* home action buttons sit in a row when there's width.
+       no-wrap + row-gap so the buttons' drop-shadows never overlap each other */
+    #screen-home .home-actions{ flex-direction:row; flex-wrap:nowrap; gap:12px; row-gap:16px; margin-top:18px; }
+    #screen-home .home-actions .btn{ flex:1 1 0; min-width:0; }
 
     /* answer-gate: compact the secret prompt so it fits short landscape */
     #screen-answerGate .gate{ padding:0; gap:10px; }
@@ -738,7 +738,7 @@
     <div class="q-head">
       <button class="ghost-btn" onclick="go('home')">‹ 返回</button>
       <div class="q-head-right">
-        <button class="q-diffbadge q-modetoggle" onclick="toggleQuestionMode()" aria-label="切換提示模式"><span id="q-modeico">🧭</span> <span id="q-modename">有提示</span> <span class="mode-swap">⇄</span></button>
+        <button class="q-diffbadge q-modetoggle" onclick="toggleQuestionMode()" aria-label="切換提示模式"><span id="q-modeico">🧭</span> <span id="q-modename">提示：開</span> <span class="mode-swap">⇄</span></button>
         <button class="btn-swap" onclick="nextQuestion()" aria-label="換過另一題"><span class="swap-ico">🔄</span> 換題目</button>
       </div>
     </div>
@@ -754,7 +754,7 @@
         <div class="hint"><div class="h-num">3</div><div class="h-txt" id="q-h3">—</div></div>
       </div>
     </div>
-    <button class="btn mint" onclick="go('answerGate')">老實人睇答案 →</button>
+    <button class="btn mint btn-compact" onclick="go('answerGate')">老實人睇答案 →</button>
   </section>
 
   <!-- ========== ANSWER GATE (hold to reveal) ========== -->
@@ -945,8 +945,8 @@ async function loadBank(){
 }
 
 const MODE_META = {
-  none:  {ico:'🙈', name:'冇提示'},
-  hints: {ico:'🧭', name:'有提示'}
+  none:  {ico:'🙈', name:'提示：關'},
+  hints: {ico:'🧭', name:'提示：開'}
 };
 
 // ---------- persisted settings ----------
