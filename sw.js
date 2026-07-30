@@ -1,5 +1,5 @@
 /* 9UP service worker (flat, root-level PNG icons). Bump CACHE_VERSION on change. */
-const CACHE_VERSION = 'v14-flat';
+const CACHE_VERSION = 'v15-flat';
 const CACHE_NAME = '9up-' + CACHE_VERSION;
 
 const CORE_ASSETS = [
