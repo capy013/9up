@@ -134,21 +134,20 @@
   .btn-row{display:flex; gap:12px; margin-top:12px;}
   .btn-row .btn{margin:0;}
 
-  /* question-screen bottom actions: a quiet 換題目 button above the main CTA */
-  .q-actions{ display:flex; flex-direction:column; gap:10px; width:100%; }
+  /* 換題目 button — sits in the header under the mode toggle, matching its pill look */
   .btn-swap{
-    appearance:none; cursor:pointer; font-family:inherit;
-    align-self:center; width:auto;
-    padding:10px 20px; border-radius:999px;
-    background:rgba(255,255,255,.05); color:var(--muted);
+    appearance:none; cursor:pointer; font-family:inherit; width:auto;
+    padding:7px 14px; border-radius:999px;
+    background:var(--ink-2); color:var(--muted);
     border:1px solid var(--line);
-    font-size:15px; font-weight:700; letter-spacing:.02em;
-    display:inline-flex; align-items:center; gap:8px;
+    font-size:13px; font-weight:800; letter-spacing:.08em;
+    display:inline-flex; align-items:center; gap:6px;
     transition:transform .1s, background .15s, color .15s;
   }
-  .btn-swap:active{ transform:scale(.95); background:rgba(255,255,255,.1); color:var(--cream); }
+  .btn-swap:active{ transform:scale(.94); background:var(--ink-3); color:var(--cream); }
   /* the icon gives a little spin each time you swap */
-  .btn-swap.spin > span:first-child{ animation:swapSpin .5s ease; }
+  .btn-swap .swap-ico{ display:inline-block; }
+  .btn-swap.spin .swap-ico{ animation:swapSpin .5s ease; }
   @keyframes swapSpin{ from{transform:rotate(0)} to{transform:rotate(360deg)} }
   /* the new word fades/pops in when swapped */
   .q-word.swapping{ animation:wordSwap .32s ease; }
@@ -175,7 +174,9 @@
   /* ============ DIFFICULTY ============ */
 
   /* ============ QUESTION ============ */
-  .q-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:auto;}
+  .q-head{display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:auto; gap:10px;}
+  /* right side of the header: mode toggle on top, 換題目 aligned right under it */
+  .q-head-right{ display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
   .q-diffbadge{
     display:inline-flex; align-items:center; gap:7px; font-size:13px; font-weight:800;
     letter-spacing:.1em; color:var(--muted); border:1px solid var(--line);
@@ -736,7 +737,10 @@
   <section id="screen-question" class="screen">
     <div class="q-head">
       <button class="ghost-btn" onclick="go('home')">‹ 返回</button>
-      <button class="q-diffbadge q-modetoggle" onclick="toggleQuestionMode()" aria-label="切換提示模式"><span id="q-modeico">🧭</span> <span id="q-modename">有提示</span> <span class="mode-swap">⇄</span></button>
+      <div class="q-head-right">
+        <button class="q-diffbadge q-modetoggle" onclick="toggleQuestionMode()" aria-label="切換提示模式"><span id="q-modeico">🧭</span> <span id="q-modename">有提示</span> <span class="mode-swap">⇄</span></button>
+        <button class="btn-swap" onclick="nextQuestion()" aria-label="換過另一題"><span class="swap-ico">🔄</span> 換題目</button>
+      </div>
     </div>
     <div class="q-body">
       <div class="q-center">
@@ -750,10 +754,7 @@
         <div class="hint"><div class="h-num">3</div><div class="h-txt" id="q-h3">—</div></div>
       </div>
     </div>
-    <div class="q-actions">
-      <button class="btn-swap" onclick="nextQuestion()" aria-label="換過另一題">🔄 換題目</button>
-      <button class="btn mint" onclick="go('answerGate')">老實人睇答案 →</button>
-    </div>
+    <button class="btn mint" onclick="go('answerGate')">老實人睇答案 →</button>
   </section>
 
   <!-- ========== ANSWER GATE (hold to reveal) ========== -->
