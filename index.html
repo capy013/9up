@@ -134,6 +134,26 @@
   .btn-row{display:flex; gap:12px; margin-top:12px;}
   .btn-row .btn{margin:0;}
 
+  /* question-screen bottom actions: a quiet 換題目 button above the main CTA */
+  .q-actions{ display:flex; flex-direction:column; gap:10px; width:100%; }
+  .btn-swap{
+    appearance:none; cursor:pointer; font-family:inherit;
+    align-self:center; width:auto;
+    padding:10px 20px; border-radius:999px;
+    background:rgba(255,255,255,.05); color:var(--muted);
+    border:1px solid var(--line);
+    font-size:15px; font-weight:700; letter-spacing:.02em;
+    display:inline-flex; align-items:center; gap:8px;
+    transition:transform .1s, background .15s, color .15s;
+  }
+  .btn-swap:active{ transform:scale(.95); background:rgba(255,255,255,.1); color:var(--cream); }
+  /* the icon gives a little spin each time you swap */
+  .btn-swap.spin > span:first-child{ animation:swapSpin .5s ease; }
+  @keyframes swapSpin{ from{transform:rotate(0)} to{transform:rotate(360deg)} }
+  /* the new word fades/pops in when swapped */
+  .q-word.swapping{ animation:wordSwap .32s ease; }
+  @keyframes wordSwap{ 0%{opacity:0; transform:translateY(8px) scale(.96)} 100%{opacity:1; transform:none} }
+
   /* ============ HOME ============ */
   .logo-wrap{text-align:center; margin-top:8vh;}
   .logo-num{
@@ -180,6 +200,11 @@
   }
   .q-body > *:first-child{ margin-top:auto; }
   .q-body > *:last-child{ margin-bottom:auto; }
+  /* 冇提示模式：hints 隱藏咗，剩返題目，要真正垂直置中（唔好靠 auto-margin，
+     因為隱藏咗嘅 hints 仍然係 DOM last-child，會令題目被推到底）*/
+  .q-body.no-hints{ justify-content:center; }
+  .q-body.no-hints > *:first-child{ margin-top:0; }
+  .q-body.no-hints > *:last-child{ margin-bottom:0; }
   .q-center{
     display:flex; flex-direction:column; align-items:center;
     justify-content:center; text-align:center; padding:10px 0;
@@ -725,7 +750,10 @@
         <div class="hint"><div class="h-num">3</div><div class="h-txt" id="q-h3">—</div></div>
       </div>
     </div>
-    <button class="btn mint" onclick="go('answerGate')">老實人睇答案 →</button>
+    <div class="q-actions">
+      <button class="btn-swap" onclick="nextQuestion()" aria-label="換過另一題">🔄 換題目</button>
+      <button class="btn mint" onclick="go('answerGate')">老實人睇答案 →</button>
+    </div>
   </section>
 
   <!-- ========== ANSWER GATE (hold to reveal) ========== -->
@@ -883,14 +911,14 @@
     <div class="help-scroll">
       <div class="eyebrow">點樣玩</div>
       <div class="title-lg">9UP 玩法</div>
-      <div class="title-sub">角色用你副實體卡牌派，部機淨係負責出題、俾老實人偷睇答案同開估。</div>
-      <div class="step"><div class="s-n">1</div><div class="s-c"><b>派角色</b><p>用實體卡牌分老實人、9up、諗樣。老實人係唯一知道真答案嗰個，9up要靠亂噏，諗樣負責猜邊個亂噏。部機唔需要知邊個係邊個。</p></div></div>
-      <div class="step"><div class="s-n">2</div><div class="s-c"><b>出題</b><p>喺主頁㩒「開始出題」，全場睇同一個題目詞語。右上角可以㩒一下切換「有提示／冇提示」：有提示會多俾三個方向（一真兩假），冇提示就淨係得個詞。</p></div></div>
-      <div class="step"><div class="s-n">3</div><div class="s-c"><b>老實人偷睇答案</b><p>㩒「老實人睇答案」，由老實人一個人睇真相，其他人望開。可喺設定揀「撳實先睇」（放手即收）或「限時睇」（㩒一下、夠鐘自動收）。</p></div></div>
-      <div class="step"><div class="s-n">4</div><div class="s-c"><b>大家 9UP</b><p>老實人睇完，畫面顯示題目（有提示模式仲會顯示三個方向）。跟住逐個開始亂up：老實人講真、9up亂噏，令諗樣分唔到邊個先係真。</p></div></div>
-      <div class="step"><div class="s-n">5</div><div class="s-c"><b>諗樣猜人</b><p>大家講完，諗樣估邊個係亂噏嘅9up。呢一步喺現場口頭／指人進行，部機唔參與。</p></div></div>
-      <div class="step"><div class="s-n">6</div><div class="s-c"><b>開估</b><p>㩒「開估」，滑動解鎖先揭曉真答案（避免手滑）。有提示模式仲會標示邊個方向先係真。點樣計分由你哋自己講數。</p></div></div>
-      <div class="step" style="border:none;"><div class="s-n" style="background:var(--mint);">🎯</div><div class="s-c"><b>選角工具（主頁）</b><p>想用手機幫手分角色，可以喺主頁㩒「選角」，轉手指分別指定諗樣同老實人。唔想用就照樣用實體牌分。</p></div></div>
+      <div class="title-sub">一副實體卡牌分角色，手機負責出題同睇答案。準備好就開波！</div>
+      <div class="step"><div class="s-n">1</div><div class="s-c"><b>抽角色</b><p>用實體卡牌抽角色：一個「老實人」、一個「諗樣」，其餘做「9up」。只有老實人會知道真答案；9up 要靠唚；諗樣就負責捉出邊個喺度唚。</p></div></div>
+      <div class="step"><div class="s-n">2</div><div class="s-c"><b>出題</b><p>㩒「開始出題」，全場一齊睇個題目詞語。個詞唔啱睇？㩒「換題目」即刻換過另一題。想玩難啲，右上角撳一下收起提示；想玩易啲，開返「有提示」就多三個方向（一真兩假）畀你參考。</p></div></div>
+      <div class="step"><div class="s-n">3</div><div class="s-c"><b>老實人睇答案</b><p>㩒「老實人睇答案」，得老實人自己一個睇真相，其他人要望開唔好偷睇。（可以喺設定揀撳實先睇，定係限時自動收。）</p></div></div>
+      <div class="step"><div class="s-n">4</div><div class="s-c"><b>輪流 9UP</b><p>跟住逐個發言：老實人講真嘢，9up 就唚到似層層。目標係唚到諗樣分唔清邊個先係講緊真嘢。</p></div></div>
+      <div class="step"><div class="s-n">5</div><div class="s-c"><b>諗樣捉唚</b><p>大家講完，諗樣就估邊個係唚緊嘅 9up，當場指出嚟。</p></div></div>
+      <div class="step"><div class="s-n">6</div><div class="s-c"><b>開估</b><p>㩒「開估」，滑動解鎖就揭曉真答案，睇下諗樣捉唔捉到、9up 呃唔呃到人。點樣計分你哋自己夾。</p></div></div>
+      <div class="step" style="border:none;"><div class="s-n" style="background:var(--mint);">🎯</div><div class="s-c"><b>想手機幫手抽角色？</b><p>唔想用實體牌抽，可以喺主頁㩒「選角」，轉手指幫你指定諗樣同老實人。唔想用就照樣用實體牌。</p></div></div>
       <button class="btn" onclick="go('home')" style="margin-top:8px;">明喇，開波</button>
     </div>
   </section>
@@ -1031,6 +1059,31 @@ function drawQuestion(){
   renderQuestionMode();                         // badge + hints per current mode
 }
 
+// 換題目：抽新一題但保留而家嘅提示模式（唔會 reset 返設定預設），
+// 避免即時重複，並加少少切換動畫。喺出題頁㩒「換題目」時呼叫。
+function nextQuestion(){
+  const deck = BANK.length ? BANK : EMBEDDED_BANK;
+  if(!deck.length) return;
+  let pool = deck.filter(q => !recentIds.includes(q.id));
+  if(!pool.length) pool = deck.filter(q => !state.current || q.id !== state.current.id);
+  if(!pool.length) pool = deck;
+  const q = pool[Math.floor(Math.random()*pool.length)];
+  state.current = q;
+  recentIds.push(q.id);
+  const keep = Math.min(5, Math.max(0, deck.length - 1));
+  while(recentIds.length > keep) recentIds.shift();
+
+  const wordEl = document.getElementById('q-word');
+  wordEl.textContent = q.word;
+  renderQuestionMode();                          // keeps state.mode as-is
+  buzz(10);
+
+  // little swap animations (respect reduced-motion via the global rule)
+  wordEl.classList.remove('swapping'); void wordEl.offsetWidth; wordEl.classList.add('swapping');
+  const swapBtn = document.querySelector('.btn-swap');
+  if(swapBtn){ swapBtn.classList.remove('spin'); void swapBtn.offsetWidth; swapBtn.classList.add('spin'); }
+}
+
 // Render the question screen's mode badge + hints for the CURRENT state.mode.
 // Called on draw and whenever the badge toggle flips the mode mid-question.
 function renderQuestionMode(){
@@ -1039,13 +1092,16 @@ function renderQuestionMode(){
   document.getElementById('q-modeico').textContent = meta.ico;
   document.getElementById('q-modename').textContent = meta.name;
   const hints = document.getElementById('q-hints');
+  const qbody = hints.closest('.q-body');
   if(state.mode === 'hints'){
     hints.style.display = '';
+    if(qbody) qbody.classList.remove('no-hints');
     document.getElementById('q-h1').textContent = q.hint1;
     document.getElementById('q-h2').textContent = q.hint2;
     document.getElementById('q-h3').textContent = q.hint3;
   }else{
     hints.style.display = 'none';
+    if(qbody) qbody.classList.add('no-hints');
   }
 }
 
