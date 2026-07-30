@@ -1,0 +1,1442 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0e1020">
+<!-- add-to-home-screen: launch fullscreen like a native app (iOS + Android) -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="9UP">
+<meta name="description" content="9UP 派對出題機 — 完全離線嘅瞎掰派對遊戲，500 題冷知識任你玩。">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<title>9UP · 派對出題機</title>
+<style>
+  /* ============ DESIGN TOKENS ============
+     Palette: charcoal base, gold primary, electric-blue accent, white text
+     (token NAMES kept stable; only VALUES remapped)
+       --ink/-2/-3  = Background / bg-200 / bg-300
+       --coral/-dk  = Primary (gold) / primary-300  → primary buttons & accents
+       --mint/-dk   = Accent (blue) / accent-200     → secondary accents & "true"
+       --gold       = highlight (gold)               → result answer
+       --cream      = Text (white) ; --muted = dimmed text
+  */
+  :root{
+    --ink:        #0e1020;   /* Background — deep blue-purple night */
+    --ink-2:      #171a2e;   /* bg-200 — raised glass panel */
+    --ink-3:      #232842;   /* bg-300 — higher panel / pressed */
+    --coral:      #ffcc00;   /* Primary (gold) — primary accent role */
+    --coral-dk:   #a67c00;   /* primary-300 — button drop-shadow */
+    --mint:       #4a9dff;   /* Accent (electric blue) — secondary accent */
+    --mint-dk:    #2f6fd0;   /* accent-200 */
+    --gold:       #ffcc00;   /* highlight / correct answer */
+    --cream:      #f2f6ff;   /* Text — cool white */
+    --muted:      #8791b5;   /* dimmed secondary text — cool grey-blue */
+    --line:       rgba(150,170,255,.12);
+    --glass-hi:   rgba(255,255,255,.06);   /* top highlight on glass cards */
+    --shadow:     0 18px 40px -12px rgba(0,0,0,.7);
+    --r-lg: 28px; --r-md: 20px; --r-sm: 14px;
+    --safe-t: env(safe-area-inset-top, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    font-family:"PingFang HK","Noto Sans HK","Hiragino Sans GB","Microsoft JhengHei",system-ui,-apple-system,sans-serif;
+    background:
+      radial-gradient(125% 85% at 50% -8%, #1b2340 0%, #0e1020 46%, #07080f 100%);
+    color:var(--cream);
+    overflow:hidden;
+    user-select:none;
+    -webkit-user-select:none;
+    touch-action:manipulation;
+  }
+  #app{
+    height:100dvh;
+    display:flex;
+    flex-direction:column;
+    padding:calc(var(--safe-t) + 14px) 20px calc(var(--safe-b) + 20px);
+    max-width:520px;
+    margin:0 auto;
+    position:relative;
+  }
+
+  /* ============ SCREEN SYSTEM ============ */
+  .screen{
+    flex:1;
+    display:none;
+    flex-direction:column;
+    min-height:0;
+    animation:pop .32s cubic-bezier(.2,.9,.25,1.15);
+  }
+  .screen.active{display:flex;}
+  @keyframes pop{
+    from{opacity:0; transform:translateY(14px) scale(.98);}
+    to{opacity:1; transform:none;}
+  }
+  /* subtle, purposeful motion (kept gentle so it never distracts) */
+  @keyframes riseIn{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:none;} }
+  @keyframes wordIn{ from{opacity:0; transform:translateY(8px) scale(.985);} to{opacity:1; transform:none;} }
+  @keyframes burstIn{ 0%{opacity:0; transform:scale(.4);} 60%{opacity:1; transform:scale(1.12);} 100%{transform:scale(1);} }
+  @keyframes trueGlow{ 0%{box-shadow:0 0 0 0 rgba(0,191,255,0);} 40%{box-shadow:0 0 0 4px rgba(0,191,255,.28);} 100%{box-shadow:0 0 0 0 rgba(0,191,255,0);} }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important; transition:none!important;}
+  }
+
+  /* ============ SHARED BITS ============ */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:6px; min-height:34px;
+  }
+  .brand{
+    font-weight:900; letter-spacing:.14em; font-size:15px; color:var(--muted);
+    display:flex; align-items:center; gap:8px;
+  }
+  .brand b{color:var(--coral); letter-spacing:.28em;}
+  .ghost-btn{
+    appearance:none; border:1px solid var(--line); background:rgba(255,255,255,.03);
+    color:var(--muted); font-size:14px; font-weight:700; padding:8px 14px;
+    border-radius:999px; cursor:pointer; font-family:inherit;
+  }
+  .ghost-btn:active{background:rgba(255,255,255,.09); transform:scale(.96);}
+
+  .eyebrow{
+    font-size:13px; font-weight:800; letter-spacing:.32em; color:var(--mint);
+    text-transform:uppercase; margin-bottom:14px;
+  }
+  .spacer{flex:1;}
+
+  /* Big primary action button — thumb friendly, softly lit (Neon Stage) */
+  .btn{
+    appearance:none; border:none; cursor:pointer; font-family:inherit;
+    width:100%; padding:20px; border-radius:var(--r-md);
+    font-size:21px; font-weight:900; letter-spacing:.04em;
+    color:#04122a; background:linear-gradient(180deg,#ffd633,var(--coral));
+    box-shadow:0 6px 0 var(--coral-dk), 0 12px 30px -6px rgba(255,204,0,.35), var(--shadow);
+    transition:transform .06s, box-shadow .06s;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+  }
+  .btn:active{transform:translateY(4px); box-shadow:0 2px 0 var(--coral-dk), 0 8px 20px -8px rgba(255,204,0,.3), var(--shadow);}
+  .btn.mint{background:linear-gradient(180deg,#5aa8ff,var(--mint)); box-shadow:0 6px 0 var(--mint-dk), 0 12px 30px -6px rgba(74,157,255,.4), var(--shadow);}
+  .btn.mint:active{box-shadow:0 2px 0 var(--mint-dk), 0 8px 20px -8px rgba(74,157,255,.35), var(--shadow);}
+  .btn.ghost{
+    background:linear-gradient(180deg, var(--glass-hi), rgba(255,255,255,.01)); color:var(--cream);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.06); border:1px solid var(--line);
+    font-size:18px; padding:18px;
+  }
+  .btn.ghost:active{transform:scale(.97); background:rgba(255,255,255,.09);}
+  .btn:disabled{opacity:.4; box-shadow:none; transform:none;}
+  /* slightly smaller button — frees vertical space on content-heavy screens */
+  .btn-compact{padding:16px; font-size:20px; box-shadow:0 5px 0 var(--coral-dk), 0 10px 24px -8px rgba(255,204,0,.3), var(--shadow);}
+  .btn-compact.mint{ box-shadow:0 5px 0 var(--mint-dk), 0 10px 24px -8px rgba(74,157,255,.35), var(--shadow); }
+  .btn-compact:active{transform:translateY(5px); box-shadow:0 3px 0 var(--coral-dk), var(--shadow);}
+  .btn-row{display:flex; gap:12px; margin-top:12px;}
+  .btn-row .btn{margin:0;}
+  /* result screen: two buttons side by side. 下一題 is primary (wider), 返主頁 secondary.
+     Compact height because this screen is content-heavy (answer + recap). */
+  .result-actions .btn{ padding:16px; font-size:19px; box-shadow:0 7px 0 var(--coral-dk), var(--shadow); }
+  .result-actions .btn:active{ transform:translateY(4px); box-shadow:0 3px 0 var(--coral-dk), var(--shadow); }
+  .result-actions .btn.ghost{ flex:0 0 34%; box-shadow:none; }
+  .result-actions .btn.ghost:active{ transform:scale(.97); box-shadow:none; }
+  .result-actions > button:last-child{ flex:1 1 auto; }
+
+  /* 換題目 button — sits in the header under the mode toggle, matching its pill look */
+  .btn-swap{
+    appearance:none; cursor:pointer; font-family:inherit; width:auto;
+    padding:7px 14px; border-radius:999px;
+    background:var(--ink-2); color:var(--muted);
+    border:1px solid var(--line);
+    font-size:13px; font-weight:800; letter-spacing:.08em;
+    display:inline-flex; align-items:center; gap:6px;
+    transition:transform .1s, background .15s, color .15s;
+  }
+  .btn-swap:active{ transform:scale(.94); background:var(--ink-3); color:var(--cream); }
+  /* the icon gives a little spin each time you swap */
+  .btn-swap .swap-ico{ display:inline-block; }
+  .btn-swap.spin .swap-ico{ animation:swapSpin .5s ease; }
+  @keyframes swapSpin{ from{transform:rotate(0)} to{transform:rotate(360deg)} }
+  /* the new word fades/pops in when swapped */
+  .q-word.swapping{ animation:wordSwap .32s ease; }
+  @keyframes wordSwap{ 0%{opacity:0; transform:translateY(8px) scale(.96)} 100%{opacity:1; transform:none} }
+
+  /* ============ HOME ============ */
+  .logo-wrap{text-align:center; margin-top:8vh;}
+  .logo-num{
+    font-size:clamp(104px,32vw,180px); font-weight:900; line-height:.82;
+    background:linear-gradient(150deg, var(--gold) 0%, #ffe066 38%, var(--mint) 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    letter-spacing:.01em; filter:drop-shadow(0 8px 30px rgba(255,204,0,.28));
+  }
+  .logo-sub{
+    font-size:26px; font-weight:900; letter-spacing:.5em; color:var(--cream);
+    margin:6px 0 4px 8px;
+  }
+  .home-actions{margin-top:auto; display:flex; flex-direction:column; gap:14px;}
+  .home-mini{
+    display:flex; gap:12px;
+  }
+  .home-mini .btn{font-size:16px; padding:15px;}
+
+  /* ============ DIFFICULTY ============ */
+
+  /* ============ QUESTION ============ */
+  .q-head{display:flex; align-items:flex-start; justify-content:space-between; gap:10px;}
+  /* right side of the header: mode toggle + 換題目 side by side (saves vertical room) */
+  .q-head-right{ display:flex; flex-direction:row; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+  .q-diffbadge{
+    display:inline-flex; align-items:center; gap:7px; font-size:13px; font-weight:800;
+    letter-spacing:.1em; color:var(--muted); border:1px solid var(--line);
+    padding:7px 14px; border-radius:999px;
+  }
+  /* tappable mode toggle in the question header */
+  .q-modetoggle{
+    appearance:none; font-family:inherit; cursor:pointer; background:var(--ink-2);
+    transition:transform .08s, background .15s, border-color .15s;
+  }
+  .q-modetoggle:active{transform:scale(.94); background:var(--ink-3);}
+  .q-modetoggle .mode-swap{
+    font-size:12px; color:var(--mint); font-weight:900; margin-left:1px;
+    opacity:.85;
+  }
+  /* Keep the word+hints anchored toward the TOP with a small, fixed offset — not
+     centred in the whole column (which left a huge void on tall screens). Any leftover
+     space just sits at the bottom naturally. On short screens it can scroll. */
+  .q-body{
+    flex:1 1 auto; min-height:0; width:100%;
+    display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+    gap:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    padding-top:clamp(8px, 2.5vh, 28px);
+  }
+  .q-body > *:first-child{ margin-top:0; }
+  .q-body > *:last-child{ margin-bottom:0; }
+  /* 冇提示模式：hints 隱藏咗，剩返題目 —— 置中好啲（得一件嘢，靠上會太寡） */
+  .q-body.no-hints{ justify-content:center; padding-top:0; }
+  .q-center{
+    display:flex; flex-direction:column; align-items:center;
+    justify-content:center; text-align:center; padding:10px 0;
+    position:relative;
+  }
+  /* Neon Stage: a soft spotlight blooms behind the word */
+  .q-center::before{
+    content:""; position:absolute; top:50%; left:50%;
+    width:min(360px,86vw); height:min(360px,86vw);
+    transform:translate(-50%,-50%);
+    background:radial-gradient(circle, rgba(74,157,255,.22), transparent 60%);
+    filter:blur(14px); pointer-events:none; z-index:0;
+  }
+  .q-center > *{ position:relative; z-index:1; }
+  /* small, quiet tag — the WORD below is the star, not this label */
+  .q-label{
+    font-size:11px; letter-spacing:.5em; color:var(--muted); font-weight:700;
+    margin-bottom:14px; opacity:.7;
+  }
+  /* 題目詞語：霓虹藍描邊效果（除咗開估結果頁，全部題目都用呢個） */
+  .q-word{
+    font-size:clamp(52px,17vw,88px); font-weight:900; line-height:1.03;
+    letter-spacing:.02em; color:#eafaff;
+    text-shadow:
+      0 0 4px rgba(0,191,255,.9),
+      0 0 10px rgba(0,191,255,.7),
+      0 0 20px rgba(0,191,255,.5),
+      0 0 40px rgba(0,191,255,.3);
+  }
+  .pt-word{ font-size:clamp(42px,13vw,66px); }
+  .pt-word-wrap{ display:flex; justify-content:center; }
+  /* clear visual break between the word block and the hints */
+  .hints{
+    display:flex; flex-direction:column; gap:9px; width:100%;
+    margin:18px 0 0; padding-top:16px; border-top:1px solid var(--line);
+  }
+  .hint-title{
+    text-align:center; font-size:12px; letter-spacing:.34em; color:var(--muted);
+    font-weight:700; margin-bottom:4px;
+  }
+  .hint{
+    display:flex; align-items:center; justify-content:center; gap:16px;
+    background:linear-gradient(180deg, var(--glass-hi), rgba(255,255,255,.015));
+    border:1px solid var(--line);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+    border-radius:var(--r-sm); padding:12px 20px;
+  }
+  /* hints ease in one after another when the question screen becomes active */
+  .screen.active #q-hints .hint{ animation:riseIn .34s ease both; }
+  .screen.active #q-hints .hint:nth-child(2){ animation-delay:.05s; }
+  .screen.active #q-hints .hint:nth-child(3){ animation-delay:.11s; }
+  .screen.active #q-hints .hint:nth-child(4){ animation-delay:.17s; }
+  .hint .h-num{
+    width:34px; height:34px; flex:none; border-radius:50%;
+    display:grid; place-items:center; font-weight:900; font-size:16px;
+    background:rgba(255,255,255,.06); color:var(--muted);
+  }
+  .hint .h-txt{font-size:26px; font-weight:800; letter-spacing:.06em; text-align:center;}
+
+  /* ============ ANSWER (secret) ============ */
+  #screen-answer{background:transparent;}
+  .secret-wrap{
+    flex:1; display:flex; flex-direction:column;
+    border-radius:var(--r-lg);
+    background:
+      repeating-linear-gradient(45deg, #202020 0 22px, #191919 22px 44px);
+    border:2px solid var(--coral);
+    padding:26px 24px; box-shadow:var(--shadow);
+    position:relative; overflow:hidden;
+  }
+  .secret-tag{
+    align-self:center; background:var(--coral); color:var(--ink);
+    font-weight:900; letter-spacing:.18em; font-size:14px;
+    padding:8px 20px; border-radius:999px; margin-bottom:6px;
+  }
+  .secret-warn{
+    text-align:center; color:var(--gold); font-size:15px; font-weight:800;
+    letter-spacing:.05em; margin:14px 0;
+  }
+  .ans-center{
+    flex:1; min-height:0; display:flex; flex-direction:column; align-items:center;
+    justify-content:flex-start; text-align:center; gap:14px;
+    overflow-y:auto; padding:4px 2px; width:100%;
+  }
+  .ans-word{
+    font-size:clamp(30px,8vw,44px); color:#eafaff; font-weight:900;
+    letter-spacing:.04em; margin-top:6px;
+    text-shadow:
+      0 0 4px rgba(0,191,255,.9),
+      0 0 10px rgba(0,191,255,.65),
+      0 0 20px rgba(0,191,255,.45);
+  }
+  .ans-body{
+    font-size:clamp(19px,5.4vw,24px); font-weight:600; line-height:1.65; color:var(--cream);
+    text-align:left; max-width:32ch; letter-spacing:.01em;
+  }
+  .ans-truehint{
+    font-size:16px; color:var(--mint); font-weight:800; letter-spacing:.06em;
+    background:rgba(0,191,255,.12); border:1px solid rgba(0,191,255,.35);
+    padding:9px 18px; border-radius:999px; flex:none;
+  }
+  .countdown{
+    position:absolute; top:20px; right:22px; font-size:34px; font-weight:900;
+    color:var(--coral); font-variant-numeric:tabular-nums;
+  }
+  /* timed peek: when the clock runs out the card greys and locks (no re-peek) */
+  .expired-overlay{
+    position:absolute; inset:0; display:none; flex-direction:column;
+    align-items:center; justify-content:center; gap:16px;
+    background:rgba(13,13,13,.93); backdrop-filter:blur(3px);
+    border-radius:var(--r-lg); text-align:center;
+  }
+  .expired-overlay.show{display:flex;}
+  .expired-lock{font-size:60px; filter:grayscale(1) opacity(.9);}
+  .expired-txt{font-size:26px; font-weight:900; color:var(--muted); letter-spacing:.08em;}
+  .secret-wrap.expired{filter:grayscale(.85) brightness(.7);}
+  /* timed-mode gate: a ready prompt showing how long you'll get */
+  .gate-timebadge{
+    display:inline-flex; align-items:baseline; gap:6px;
+    background:rgba(255,204,0,.12); border:1px solid rgba(255,204,0,.38);
+    color:var(--gold); padding:12px 22px; border-radius:999px;
+  }
+  .gate-timebadge b{font-size:40px; font-weight:900; font-variant-numeric:tabular-nums;}
+  .gate-timebadge span{font-size:16px; font-weight:800;}
+  .gate-timebadge.hidden{display:none;}
+
+  /* Peek gate — hold to reveal so bystanders can't accidentally see */
+  .gate{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; gap:24px; padding:20px;
+  }
+  .gate-icon{font-size:64px;}
+  .gate h2{font-size:30px; font-weight:900; margin:0;}
+  .gate p{color:var(--muted); font-size:16px; margin:0; line-height:1.6; max-width:300px;}
+
+  /* ============ POINT (指向) ============ */
+  .point-head{text-align:center; margin-bottom:6px;}
+  .point-head h2{font-size:28px; font-weight:900; margin:4px 0;}
+  .point-head p{color:var(--muted); font-size:14px; margin:0; line-height:1.5;}
+  /* slide to unlock */
+  .slider{
+    width:100%; max-width:360px; height:78px; border-radius:999px;
+    background:var(--ink-2); border:1px solid var(--line); position:relative;
+    overflow:hidden; touch-action:none;
+  }
+  .slider .track-label{
+    position:absolute; inset:0; display:grid; place-items:center;
+    color:var(--muted); font-weight:800; letter-spacing:.1em; font-size:16px;
+    padding-left:60px;
+  }
+  .slider .fill{
+    position:absolute; left:0; top:0; bottom:0; width:70px;
+    background:linear-gradient(90deg, var(--coral-dk), var(--coral));
+    opacity:.25;
+  }
+  .slider .knob{
+    position:absolute; left:5px; top:5px; width:68px; height:68px; border-radius:50%;
+    background:var(--coral); box-shadow:0 6px 16px rgba(0,0,0,.4);
+    display:grid; place-items:center; font-size:30px; color:var(--ink);
+    z-index:2;
+  }
+  /* inline reveal slider sitting at the bottom of the 9UP ING screen
+     (replaces the old separate 開估 page to save a screen) */
+  .reveal-inline{ width:100%; display:flex; flex-direction:column; align-items:center; gap:8px; flex:none; }
+  .reveal-hint{ font-size:13px; color:var(--muted); font-weight:700; letter-spacing:.12em; }
+  #screen-point .slider{ height:66px; }
+  #screen-point .slider .knob{ width:56px; height:56px; font-size:26px; }
+
+  /* ============ RESULT ============ */
+  .result-wrap{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+    text-align:center; gap:12px; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    padding:2px 2px; width:100%;
+  }
+  .result-burst{font-size:34px; flex:none; margin-top:0; animation:burstIn .5s cubic-bezier(.2,.9,.25,1.4) both;}
+  .result-word{
+    font-size:clamp(26px,7vw,38px); color:var(--gold); font-weight:900; letter-spacing:.04em;
+    text-shadow:0 6px 24px rgba(255,204,0,.28); flex:none;
+  }
+  .result-answer{
+    font-size:clamp(19px,5.2vw,23px); font-weight:600; line-height:1.6; color:var(--cream);
+    text-align:left; max-width:32ch; letter-spacing:.01em; flex:none;
+  }
+  /* recap of the three hints, with the true one lit up */
+  .recap-hints{width:100%; display:flex; flex-direction:column; gap:9px; margin-top:2px;}
+  .recap-title{font-size:12px; letter-spacing:.3em; color:var(--muted); font-weight:700;}
+  .recap{
+    display:flex; align-items:center; gap:14px; padding:13px 18px;
+    background:var(--ink-2); border:1px solid var(--line); border-radius:var(--r-sm);
+  }
+  .recap .r-num{
+    width:30px; height:30px; flex:none; border-radius:50%; display:grid; place-items:center;
+    font-weight:900; font-size:15px; background:rgba(255,255,255,.06); color:var(--muted);
+  }
+  .recap .r-txt{font-size:22px; font-weight:800; letter-spacing:.05em; flex:1; text-align:left; color:var(--cream);}
+  .recap.is-true{border-color:var(--mint); background:rgba(0,191,255,.14);}
+  .screen.active .recap.is-true{ animation:trueGlow 1.1s ease .25s 1; }
+  .recap.is-true .r-num{background:var(--mint); color:var(--ink);}
+  .recap.is-true .r-txt{color:var(--mint);}
+  .recap .r-tag{font-size:12px; font-weight:900; color:var(--mint); letter-spacing:.1em;}
+
+  /* ============ ROLE SELECT (揀角 hub) ============ */
+  .role-intro{text-align:center; margin-bottom:4px;}
+  .role-cards{display:flex; flex-direction:column; gap:14px; margin:2px 0;}
+  /* hub pick buttons — tap to open that role's spin screen */
+  .role-pick{
+    appearance:none; font-family:inherit; cursor:pointer; text-align:left; width:100%;
+    color:var(--cream);
+    background:var(--ink-2); border:1px solid var(--line); border-radius:var(--r-md);
+    padding:22px 22px; position:relative; overflow:hidden;
+    display:flex; align-items:center; gap:16px;
+    transition:transform .08s, background .15s;
+  }
+  .role-pick:active{transform:scale(.98); background:var(--ink-3);}
+  .role-pick .rc-emoji{font-size:42px; flex:none;}
+  .role-pick .rc-name{flex:1;}
+  .role-pick .rc-name b{display:block; font-size:25px; font-weight:900; color:var(--cream);}
+  .role-pick .rc-name span{font-size:13px; color:var(--muted);}
+  .role-pick .rc-go{font-size:15px; font-weight:800; color:var(--muted); flex:none;}
+  .role-pick::before{content:""; position:absolute; left:0; top:0; bottom:0; width:6px;}
+  .role-pick.role-a::before{background:var(--mint);}
+  .role-pick.role-b::before{background:var(--gold);}
+  .role-pick.role-a .rc-go{color:var(--mint);}
+  .role-pick.role-b .rc-go{color:var(--gold);}
+  .role-hint{text-align:center; color:var(--muted); font-size:13px; line-height:1.5; margin-top:8px;}
+
+  /* ============ SPIN SCREENS (big finger) ============ */
+  .spin-head{text-align:center; margin-top:2vh;}
+  .spin-emoji{font-size:52px; margin-bottom:6px;}
+  .spin-title{font-size:30px; font-weight:900;}
+  .spin-sub{color:var(--muted); font-size:15px; margin-top:4px;}
+  .spin-stage{
+    flex:1; display:flex; align-items:center; justify-content:center; min-height:0; padding:10px 0;
+  }
+  .spin-finger{
+    font-size:clamp(150px, 46vw, 220px); line-height:1;
+    transition:transform 1.15s cubic-bezier(.17,.67,.21,1);
+    transform:rotate(var(--rot,0deg));
+  }
+  .spin-finger.a{filter:drop-shadow(0 12px 26px rgba(0,191,255,.5));}
+  .spin-finger.b{filter:drop-shadow(0 12px 26px rgba(255,204,0,.5));}
+
+  /* ============ SETTINGS ============ */
+  .set-list{display:flex; flex-direction:column; gap:14px; margin-top:2px; flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:4px 4px 8px; -webkit-mask-image:linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%); mask-image:linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%);}
+  .set-row{
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    background:linear-gradient(180deg, var(--glass-hi), rgba(255,255,255,.015));
+    border:1px solid var(--line);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+    border-radius:var(--r-md); padding:20px 22px;
+  }
+  .set-row .s-txt b{display:block; font-size:18px; font-weight:800;}
+  .set-row .s-txt span{font-size:13px; color:var(--muted);}
+  /* toggle */
+  .toggle{
+    width:62px; height:36px; border-radius:999px; background:var(--ink-3);
+    border:1px solid var(--line); position:relative; cursor:pointer; flex:none;
+    transition:background .2s;
+  }
+  .toggle .knob{
+    position:absolute; top:3px; left:3px; width:28px; height:28px; border-radius:50%;
+    background:var(--muted); transition:transform .2s, background .2s;
+  }
+  .toggle.on{background:var(--mint);}
+  .toggle.on .knob{transform:translateX(26px); background:var(--ink);}
+  .seg{display:flex; gap:6px; background:var(--ink-3); padding:5px; border-radius:999px;}
+  .seg button{
+    appearance:none; border:none; background:transparent; color:var(--muted);
+    font-family:inherit; font-weight:800; font-size:14px; padding:9px 16px;
+    border-radius:999px; cursor:pointer;
+  }
+  .seg button.on{background:var(--coral); color:var(--ink);}
+  /* stacked row variant: label on top, full-width segmented control below */
+  .set-row-col{flex-direction:column; align-items:stretch; gap:14px;}
+  .set-row-col .s-row-top{display:flex; align-items:center; justify-content:space-between;}
+  .seg-wide{width:100%;}
+  .seg-wide button{flex:1; padding:12px 8px; text-align:center;}
+  #row-peektime{transition:opacity .2s;}
+  #row-peektime.disabled{opacity:.4; pointer-events:none;}
+  /* seconds badge + range slider */
+  .secs-badge{
+    background:var(--coral); color:var(--ink); font-weight:900; font-size:16px;
+    padding:6px 16px; border-radius:999px; letter-spacing:.02em; min-width:78px; text-align:center;
+  }
+  .range-wrap{width:100%;}
+  .range{
+    -webkit-appearance:none; appearance:none; width:100%; height:14px; border-radius:999px;
+    background:var(--ink-3); outline:none; cursor:pointer; margin:2px 0;
+  }
+  .range::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:34px; height:34px; border-radius:50%;
+    background:var(--coral); border:4px solid var(--ink-2);
+    box-shadow:0 4px 12px rgba(0,0,0,.4); cursor:grab;
+  }
+  .range::-webkit-slider-thumb:active{cursor:grabbing; transform:scale(1.05);}
+  .range::-moz-range-thumb{
+    width:34px; height:34px; border-radius:50%; background:var(--coral);
+    border:4px solid var(--ink-2); box-shadow:0 4px 12px rgba(0,0,0,.4); cursor:grab;
+  }
+  .range::-moz-range-progress{background:var(--coral); height:14px; border-radius:999px;}
+  .range-scale{display:flex; justify-content:space-between; color:var(--muted); font-size:12px; font-weight:700; margin-top:6px;}
+
+  /* ============ HELP ============ */
+  /* the help SCREEN itself scrolls (no nested scroll box — that caused paint
+     artifacts on some mobile browsers). Content flows: title → steps → button. */
+  #screen-help{
+    overflow-y:auto; -webkit-overflow-scrolling:touch;
+    transform:translateZ(0);            /* own paint layer → no scroll trails */
+    isolation:isolate;
+  }
+  #screen-help::-webkit-scrollbar{width:0;}
+  /* keep the top bar visible while the guide scrolls under it */
+  #screen-help .topbar{
+    position:sticky; top:0; z-index:2; background:var(--ink);
+    padding-bottom:8px; margin-bottom:2px;
+  }
+  .help-scroll{ display:flex; flex-direction:column; }
+  .step{
+    display:flex; gap:16px; padding:16px 0; border-bottom:1px solid var(--line);
+  }
+  .step .s-n{
+    width:38px; height:38px; flex:none; border-radius:12px;
+    display:grid; place-items:center; font-weight:900; font-size:17px;
+    background:var(--coral); color:var(--ink);
+  }
+  .step .s-c b{display:block; font-size:18px; font-weight:800; margin-bottom:4px;}
+  .step .s-c p{margin:0; color:var(--muted); font-size:15px; line-height:1.6;}
+
+  .footer-hint{text-align:center; color:var(--muted); font-size:12px; letter-spacing:.1em; margin-top:14px; opacity:.7;}
+
+  .title-lg{font-size:32px; font-weight:900; letter-spacing:.02em; margin:2px 0 4px;}
+  .title-sub{color:var(--muted); font-size:14px; margin-bottom:18px; line-height:1.5;}
+
+  /* =====================================================================
+     LANDSCAPE (打橫) — real two-column layouts, NOT a scaled portrait.
+     Only applies when the screen is wider than tall. Portrait is untouched.
+     ===================================================================== */
+  @media (orientation:landscape){
+    /* widen the shell so columns have room; keep it from going edge-to-edge */
+    #app{ max-width:960px; padding-left:32px; padding-right:32px; }
+    /* last-resort safety: if a screen truly can't fit a very short landscape,
+       let it scroll rather than clip or overlap (portrait never hits this) */
+    .screen{ overflow-y:auto; }
+
+    /* --- QUESTION & 9UPING: title on the left, hints on the right --- */
+    #screen-question .q-body,
+    #screen-point .q-body{
+      flex-direction:row; align-items:center; justify-content:center;
+      gap:32px; overflow:hidden;
+    }
+    #screen-question .q-body > .q-center,
+    #screen-point .q-body > .q-center{
+      flex:1 1 0; margin:0; min-width:0;   /* left column: the word */
+    }
+    #screen-question .q-body > .hints,
+    #screen-point .q-body > .hints{
+      flex:1 1 0; margin:0; padding-top:0; border-top:none; min-width:0;
+      max-width:440px; align-self:center;  /* right column: the 3 directions */
+    }
+    /* in landscape the word can be a touch smaller so both columns balance */
+    #screen-question .q-word{ font-size:clamp(44px,9vw,78px); }
+    #screen-point .pt-word{ font-size:clamp(38px,7.5vw,64px); }
+    /* 9UPing heading takes less vertical room */
+    #screen-point .point-head{ margin-bottom:2px; }
+    #screen-point .point-head h2{ font-size:22px; }
+
+    /* --- ANSWER (老實人睇答案): wider card, word left / text right --- */
+    #screen-answer .ans-center{
+      flex-direction:row; align-items:center; justify-content:center;
+      gap:28px; text-align:left; overflow-y:auto;
+    }
+    #screen-answer .ans-word{
+      flex:0 0 auto; max-width:38%; margin:0; text-align:center;
+      font-size:clamp(28px,6vw,44px);
+    }
+    #screen-answer .ans-body{ flex:1 1 0; min-width:0; max-width:none; }
+    #screen-answer .ans-truehint{ align-self:flex-start; }
+
+    /* --- RESULT (開估): word + celebration left, answer + recap right --- */
+    #screen-result .result-wrap{
+      flex-direction:row; align-items:flex-start; justify-content:center;
+      gap:32px; text-align:left; flex-wrap:wrap;
+    }
+    #screen-result .result-burst{ order:0; }
+    #screen-result .result-word{
+      flex:1 1 40%; min-width:200px; text-align:center; align-self:center;
+    }
+    #screen-result .result-answer{ flex:1 1 45%; min-width:240px; max-width:none; }
+    #screen-result .recap-hints{ flex:1 1 100%; }
+
+    /* --- LIST-STYLE screens: just breathe in the wider shell, stay centred --- */
+    #screen-home .logo-wrap{ margin-top:2vh; }
+    /* short landscape: shrink the logo so logo + buttons fit without scrolling */
+    #screen-home .logo-num{ font-size:clamp(64px,12vh,120px); }
+    #screen-home .logo-sub{ font-size:20px; margin:2px 0 2px 8px; }
+    #screen-home .home-actions,
+    #screen-roleSelect .btn,
+    #screen-settings .set-list,
+    #screen-help .help-scroll{
+      max-width:560px; margin-left:auto; margin-right:auto; width:100%;
+    }
+    /* home action buttons sit in a row when there's width.
+       no-wrap + row-gap so the buttons' drop-shadows never overlap each other */
+    #screen-home .home-actions{ flex-direction:row; flex-wrap:nowrap; gap:12px; row-gap:16px; margin-top:18px; }
+    #screen-home .home-actions .btn{ flex:1 1 0; min-width:0; }
+
+    /* answer-gate: compact the secret prompt so it fits short landscape */
+    #screen-answerGate .gate{ padding:0; gap:10px; }
+    #screen-answerGate .gate-icon{ font-size:40px; margin-bottom:0; }
+    #screen-answerGate .gate h2{ font-size:22px; margin-bottom:0; }
+    #screen-answerGate .gate p{ font-size:14px; }
+    #screen-answerGate .gate-timebadge{ margin-top:4px; }
+
+    /* --- ROLE SELECT: compact everything so intro + cards + button fit --- */
+    #screen-roleSelect .role-intro{ margin-bottom:2px; }
+    #screen-roleSelect .role-intro .eyebrow{ display:none; }
+    #screen-roleSelect .role-intro .title-lg{ font-size:24px; }
+    #screen-roleSelect .role-intro .title-sub{ margin:4px 0 8px; font-size:12px; }
+    #screen-roleSelect .role-cards{ flex-direction:row; gap:12px; }
+    #screen-roleSelect .role-cards .role-pick{ flex:1 1 0; flex-direction:column; text-align:center; gap:4px; padding:12px 12px; }
+    #screen-roleSelect .role-pick .rc-emoji{ font-size:32px; }
+    #screen-roleSelect .role-pick .rc-name b{ font-size:20px; }
+    #screen-roleSelect .role-pick .rc-name span{ font-size:11px; }
+    #screen-roleSelect .role-pick .rc-name{ flex:none; }
+    #screen-roleSelect .role-pick .rc-go{ font-size:13px; }
+
+    /* --- SPIN (轉手指): finger scales to available height; head + buttons compact --- */
+    #screen-spinThinker .spin-head,
+    #screen-spinHonest .spin-head{ margin-top:0; }
+    #screen-spinThinker .spin-emoji,
+    #screen-spinHonest .spin-emoji{ font-size:30px; margin-bottom:0; }
+    #screen-spinThinker .spin-title,
+    #screen-spinHonest .spin-title{ font-size:22px; }
+    #screen-spinThinker .spin-sub,
+    #screen-spinHonest .spin-sub{ font-size:12px; margin-top:2px; }
+    #screen-spinThinker .spin-stage,
+    #screen-spinHonest .spin-stage{ padding:2px 0; overflow:hidden; }
+    /* finger sized to fit the stage row, capped so it never spills onto the buttons */
+    #screen-spinThinker .spin-finger,
+    #screen-spinHonest .spin-finger{ font-size:clamp(70px, 22vh, 150px); }
+    /* two spin buttons share one row to save vertical space */
+    #screen-spinThinker,
+    #screen-spinHonest{ }
+    #screen-spinThinker > .btn,
+    #screen-spinHonest > .btn{ margin-top:8px !important; padding:14px; font-size:18px; }
+
+    /* keep primary buttons from stretching absurdly wide on content screens */
+    #screen-question > .btn,
+    #screen-point > .btn,
+    #screen-answer > .btn,
+    #screen-result > .btn,
+    #screen-result > .btn.ghost,
+    #screen-answerGate > .btn,
+    #screen-answerGate > #gate-next-btn{
+      max-width:560px; margin-left:auto; margin-right:auto; width:100%;
+    }
+  }</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ========== HOME ========== -->
+  <section id="screen-home" class="screen active">
+    <div class="topbar">
+      <div class="brand"><b>9UP</b> PARTY</div>
+      <button class="ghost-btn" onclick="go('help')">玩法</button>
+    </div>
+    <div class="logo-wrap">
+      <div class="logo-num">9UP</div>
+      <div class="logo-sub">派對出題機</div>
+    </div>
+    <div class="home-actions">
+      <button class="btn" onclick="startRound()">開始出題</button>
+      <button class="btn mint" onclick="go('roleSelect')">🎯 選角</button>
+      <button class="btn ghost" onclick="go('settings')">設定</button>
+    </div>
+  </section>
+
+  <!-- ========== ROLE SELECT HUB (揀角色) ========== -->
+  <section id="screen-roleSelect" class="screen">
+    <div class="topbar">
+      <button class="ghost-btn" onclick="go('home')">‹ 返回</button>
+      <div class="brand">🎯 選 角</div>
+    </div>
+    <div class="role-intro">
+      <div class="eyebrow" style="margin-bottom:6px;">選角工具</div>
+      <div class="title-lg" style="margin:0;">轉手指分角色</div>
+      <div class="title-sub" style="margin:6px 0 14px;">將部機擺喺枱中間，一次過轉手指指定諗樣同老實人。㩒開始，轉完一個會自動接住轉下一個。</div>
+    </div>
+    <div class="role-cards">
+      <button class="role-pick role-a" onclick="startRoleFlow()">
+        <div class="rc-emoji">🧠</div>
+        <div class="rc-name"><b>諗樣</b><span>負責猜邊個 9up 嘅人</span></div>
+        <div class="rc-go" id="pick-thinker-go">轉手指 ›</div>
+      </button>
+      <button class="role-pick role-b" onclick="go('spinHonest')">
+        <div class="rc-emoji">😇</div>
+        <div class="rc-name"><b>老實人</b><span>手機睇到真答案嗰個</span></div>
+        <div class="rc-go" id="pick-honest-go">轉手指 ›</div>
+      </button>
+    </div>
+    <div class="role-hint">或者你哋自己用實體牌分都得</div>
+    <div class="spacer"></div>
+    <button class="btn" onclick="startRoleFlow()">開始轉手指 →</button>
+  </section>
+
+  <!-- ========== SPIN: 諗樣 ========== -->
+  <section id="screen-spinThinker" class="screen">
+    <div class="topbar">
+      <button class="ghost-btn" onclick="go('roleSelect')">‹ 選角</button>
+      <div class="brand">🧠 諗 樣 · 1/2</div>
+    </div>
+    <div class="spin-head">
+      <div class="spin-emoji">🧠</div>
+      <div class="spin-title">邊個做諗樣？</div>
+      <div class="spin-sub">負責猜邊個 9up 嘅人</div>
+    </div>
+    <div class="spin-stage">
+      <div class="spin-finger a" id="arrow-thinker">👉</div>
+    </div>
+    <button class="btn mint" id="spin-thinker-btn" onclick="spinRole('thinker')">🔄 轉手指</button>
+    <button class="btn" id="spin-thinker-next" onclick="go('spinHonest')" style="margin-top:12px;">去老實人 →</button>
+  </section>
+
+  <!-- ========== SPIN: 老實人 ========== -->
+  <section id="screen-spinHonest" class="screen">
+    <div class="topbar">
+      <button class="ghost-btn" onclick="go('spinThinker')">‹ 諗樣</button>
+      <div class="brand">😇 老 實 人 · 2/2</div>
+    </div>
+    <div class="spin-head">
+      <div class="spin-emoji">😇</div>
+      <div class="spin-title">邊個做老實人？</div>
+      <div class="spin-sub">手機睇到真答案嗰個</div>
+    </div>
+    <div class="spin-stage">
+      <div class="spin-finger b" id="arrow-honest">👉</div>
+    </div>
+    <button class="btn" id="spin-honest-btn" onclick="spinRole('honest')">🔄 轉手指</button>
+    <button class="btn mint" id="spin-honest-next" onclick="go('home')" style="margin-top:12px;">搞掂，返主頁 →</button>
+  </section>
+
+  <!-- ========== QUESTION ========== -->
+  <section id="screen-question" class="screen">
+    <div class="q-head">
+      <button class="ghost-btn" onclick="go('home')">‹ 返回</button>
+      <div class="q-head-right">
+        <button class="q-diffbadge q-modetoggle" onclick="toggleQuestionMode()" aria-label="切換提示模式"><span id="q-modeico">🧭</span> <span id="q-modename">提示：開</span> <span class="mode-swap">⇄</span></button>
+        <button class="btn-swap" onclick="nextQuestion()" aria-label="換過另一題"><span class="swap-ico">🔄</span> 換題目</button>
+      </div>
+    </div>
+    <div class="q-body">
+      <div class="q-center">
+        <div class="q-label">題 目</div>
+        <div class="q-word" id="q-word">—</div>
+      </div>
+      <div class="hints" id="q-hints">
+        <div class="hint-title">三 個 方 向 · 只 有 一 個 係 真</div>
+        <div class="hint"><div class="h-num">1</div><div class="h-txt" id="q-h1">—</div></div>
+        <div class="hint"><div class="h-num">2</div><div class="h-txt" id="q-h2">—</div></div>
+        <div class="hint"><div class="h-num">3</div><div class="h-txt" id="q-h3">—</div></div>
+      </div>
+    </div>
+    <button class="btn mint btn-compact" onclick="go('answerGate')">老實人睇答案 →</button>
+  </section>
+
+  <!-- ========== ANSWER GATE (hold to reveal) ========== -->
+  <section id="screen-answerGate" class="screen">
+    <div class="topbar">
+      <button class="ghost-btn" onclick="go('question')">‹ 返回題目</button>
+      <div class="brand">🤫 秘 密</div>
+    </div>
+    <div class="gate">
+      <div class="gate-icon">🙈</div>
+      <h2 id="gate-head">淨係老實人先好㩒</h2>
+      <p id="gate-desc">其他人請望開螢幕。<br>撳實下面粒掣先睇到真答案，放手就即刻收埋。</p>
+      <div class="gate-timebadge hidden" id="gate-timebadge"><b id="gate-timeval">10</b><span>秒睇答案</span></div>
+    </div>
+    <button class="btn" id="peek-btn">撳實睇答案</button>
+    <button class="btn mint" id="gate-next-btn" onclick="finishPeek()" style="margin-top:12px; display:none;">睇完！開始9UP！</button>
+  </section>
+
+  <!-- ========== ANSWER (visible while holding / timed) ========== -->
+  <section id="screen-answer" class="screen">
+    <div class="secret-wrap" id="secret-wrap">
+      <div class="countdown" id="ans-count"></div>
+      <div class="secret-tag">真 · 答 案</div>
+      <div class="ans-center">
+        <div class="ans-word" id="ans-word">—</div>
+        <div class="ans-body" id="ans-body">—</div>
+        <div class="ans-truehint" id="ans-truehint">真方向：—</div>
+      </div>
+      <!-- shown when timed peek runs out: greys the card, no re-peek -->
+      <div class="expired-overlay" id="expired-overlay">
+        <div class="expired-lock">⏱️</div>
+        <div class="expired-txt">夠鐘，準備開始</div>
+      </div>
+    </div>
+    <button class="btn mint" id="answer-next-btn" onclick="finishPeek()" style="margin-top:12px;">睇完！開始9UP！</button>
+  </section>
+
+  <!-- ========== 9UPING (shown to everyone after老實人 peeks) ========== -->
+  <section id="screen-point" class="screen">
+    <div class="topbar">
+      <button class="ghost-btn" onclick="go('question')">‹ 題目</button>
+      <div class="brand">🎤 9UP ING</div>
+    </div>
+    <div class="point-head">
+      <h2>大家可以 9UP 喇！</h2>
+    </div>
+    <div class="q-body">
+      <div class="q-center">
+        <div class="q-label">題 目</div>
+        <div class="pt-word-wrap"><div class="q-word pt-word" id="pt-word">—</div></div>
+      </div>
+      <div class="hints" id="pt-hints">
+        <div class="hint-title">三 個 方 向 · 只 有 一 個 係 真</div>
+        <div class="hint"><div class="h-num">1</div><div class="h-txt" id="pt-h1">—</div></div>
+        <div class="hint"><div class="h-num">2</div><div class="h-txt" id="pt-h2">—</div></div>
+        <div class="hint"><div class="h-num">3</div><div class="h-txt" id="pt-h3">—</div></div>
+      </div>
+    </div>
+    <div class="reveal-inline">
+      <div class="reveal-hint">滑到底開估答案</div>
+      <div class="slider" id="reveal-slider">
+        <div class="fill" id="slider-fill"></div>
+        <div class="track-label">→ → →　滑 動 開 估　→ → →</div>
+        <div class="knob" id="slider-knob">🔓</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- (開估解鎖已整合入 9UP ING 頁，唔再需要獨立頁) -->
+
+  <!-- ========== RESULT ========== -->
+  <section id="screen-result" class="screen">
+    <div class="topbar">
+      <div class="brand"><b>9UP</b> 開 估</div>
+    </div>
+    <div class="result-wrap">
+      <div class="result-burst">🎉</div>
+      <div class="result-word" id="res-word">—</div>
+      <div class="result-answer" id="res-answer">—</div>
+      <div class="recap-hints" id="res-recap">
+        <div class="recap-title">三 個 方 向</div>
+        <div class="recap" id="recap-1"><div class="r-num">1</div><div class="r-txt" id="recap-t1">—</div><div class="r-tag" id="recap-tag1"></div></div>
+        <div class="recap" id="recap-2"><div class="r-num">2</div><div class="r-txt" id="recap-t2">—</div><div class="r-tag" id="recap-tag2"></div></div>
+        <div class="recap" id="recap-3"><div class="r-num">3</div><div class="r-txt" id="recap-t3">—</div><div class="r-tag" id="recap-tag3"></div></div>
+      </div>
+    </div>
+    <div class="btn-row result-actions">
+      <button class="btn ghost" onclick="go('home')">返主頁</button>
+      <button class="btn" onclick="startRound()">下一題 →</button>
+    </div>
+  </section>
+
+  <!-- ========== SETTINGS ========== -->
+  <section id="screen-settings" class="screen">
+    <div class="topbar">
+      <button class="ghost-btn" onclick="go('home')">‹ 返回</button>
+      <div class="brand">⚙️ 設 定</div>
+    </div>
+    <div class="eyebrow" style="margin-top:4px;">偏好</div>
+    <div class="title-lg" style="margin:2px 0 2px;">設定</div>
+    <div class="title-sub" style="margin-bottom:10px;">呢啲設定會記喺部機到。</div>
+    <div class="set-list">
+      <div class="set-row set-row-col">
+        <div class="s-row-top">
+          <div class="s-txt"><b>提示模式</b><span>出題時畀唔畀三個方向提示</span></div>
+        </div>
+        <div class="seg seg-wide" id="seg-hintmode">
+          <button data-v="none" class="on">冇提示</button>
+          <button data-v="hints">有提示</button>
+        </div>
+      </div>
+      <div class="set-row set-row-col">
+        <div class="s-row-top">
+          <div class="s-txt"><b>老實人睇答案</b><span>選擇偷睇答案嘅方式</span></div>
+        </div>
+        <div class="seg seg-wide" id="seg-peekmode">
+          <button data-v="hold" class="on">撳實先睇</button>
+          <button data-v="timed">限時睇</button>
+        </div>
+      </div>
+      <div class="set-row set-row-col" id="row-peektime">
+        <div class="s-row-top">
+          <div class="s-txt"><b>限時秒數</b><span>限時模式下自動蓋住嘅時間</span></div>
+          <div class="secs-badge" id="secs-badge">10 秒</div>
+        </div>
+        <div class="range-wrap">
+          <input type="range" id="rng-peeksecs" class="range" min="5" max="60" step="1" value="10">
+          <div class="range-scale"><span>5秒</span><span>60秒</span></div>
+        </div>
+      </div>
+      <div class="set-row">
+        <div class="s-txt"><b>螢幕長開</b><span>傳嚟傳去唔會熄屏</span></div>
+        <div class="toggle" id="tg-wake" onclick="toggleWake()"><div class="knob"></div></div>
+      </div>
+      <div class="set-row">
+        <div class="s-txt"><b>震動回饋</b><span>㩒掣時輕震（部分裝置）</span></div>
+        <div class="toggle on" id="tg-haptic" onclick="toggleHaptic()"><div class="knob"></div></div>
+      </div>
+    </div>
+    <div class="footer-hint" style="flex:none;">9UP 派對出題機 · 完全離線運作</div>
+  </section>
+
+  <!-- ========== HELP ========== -->
+  <section id="screen-help" class="screen">
+    <div class="topbar">
+      <button class="ghost-btn" onclick="go('home')">‹ 返回</button>
+      <div class="brand">📖 玩 法</div>
+    </div>
+    <div class="help-scroll">
+      <div class="eyebrow">點樣玩</div>
+      <div class="title-lg">9UP 玩法</div>
+      <div class="title-sub">一副實體卡牌分角色，手機負責出題同睇答案。準備好就開波！</div>
+      <div class="step"><div class="s-n">1</div><div class="s-c"><b>抽角色</b><p>用實體卡牌抽角色：一個「老實人」、一個「諗樣」，其餘做「9up」。只有老實人會知道真答案；9up 要靠唚；諗樣就負責捉出邊個喺度唚。</p></div></div>
+      <div class="step"><div class="s-n">2</div><div class="s-c"><b>出題</b><p>㩒「開始出題」，全場一齊睇個題目詞語。個詞唔啱睇？㩒「換題目」即刻換過另一題。想玩難啲，右上角撳一下收起提示；想玩易啲，開返「有提示」就多三個方向（一真兩假）畀你參考。</p></div></div>
+      <div class="step"><div class="s-n">3</div><div class="s-c"><b>老實人睇答案</b><p>㩒「老實人睇答案」，得老實人自己一個睇真相，其他人要望開唔好偷睇。（可以喺設定揀撳實先睇，定係限時自動收。）</p></div></div>
+      <div class="step"><div class="s-n">4</div><div class="s-c"><b>輪流 9UP</b><p>跟住逐個發言：老實人講真嘢，9up 就唚到似層層。目標係唚到諗樣分唔清邊個先係講緊真嘢。</p></div></div>
+      <div class="step"><div class="s-n">5</div><div class="s-c"><b>諗樣捉唚</b><p>大家講完，諗樣就估邊個係唚緊嘅 9up，當場指出嚟。</p></div></div>
+      <div class="step"><div class="s-n">6</div><div class="s-c"><b>開估</b><p>㩒「開估」，滑動解鎖就揭曉真答案，睇下諗樣捉唔捉到、9up 呃唔呃到人。點樣計分你哋自己夾。</p></div></div>
+      <div class="step" style="border:none;"><div class="s-n" style="background:var(--mint);">🎯</div><div class="s-c"><b>想手機幫手抽角色？</b><p>唔想用實體牌抽，可以喺主頁㩒「選角」，轉手指幫你指定諗樣同老實人。唔想用就照樣用實體牌。</p></div></div>
+      <button class="btn" onclick="go('home')" style="margin-top:8px;">明喇，開波</button>
+    </div>
+  </section>
+
+</div>
+
+<script>
+/* =========================================================
+   9UPPER — offline party question machine
+   Interface layer. Questions are a placeholder deck for now;
+   real deck + custom-question support wired in later.
+   ========================================================= */
+
+// ---------- question bank ----------
+// Loaded from data/questions.json (see README for schema). Works when the app
+// is served over http(s) — e.g. GitHub Pages. Opening the file directly with
+// file:// blocks fetch (browser CORS), so we surface a clear message and fall
+// back to a tiny built-in sample just so the UI is never empty.
+// The full bank is EMBEDDED below so the game works even when opened directly
+// from disk (file://), where browsers block fetch. When served over http(s)
+// (e.g. GitHub Pages) we still try to fetch data/questions.json so the bank can
+// be updated without touching this file; if that succeeds it replaces the
+// embedded copy, otherwise the embedded copy is used. Either way: never empty,
+// always the full set.
+const EMBEDDED_BANK = [{"id":1,"word":"海和尚","answer":"海和尚是臺灣對和尚蟹的通行俗稱，因頭胸圓滑像剃光的和尚頭而得名。牠們退潮時常成群在灘地覓食，又有兵蟹之稱。","hint1":"動物","hint2":"宗教","hint3":"軍事","correctHintIndex":1},{"id":2,"word":"旋轉門現象","answer":"旋轉門現象指人員在政府監管職位與相關私人企業之間頻繁轉職。這可能帶來專業知識，也會引起利益衝突和監管偏袒疑慮。","hint1":"建築","hint2":"政治","hint3":"交通","correctHintIndex":2},{"id":3,"word":"食骨蠕蟲","answer":"食骨蠕蟲生活在深海鯨骨等大型骨骸上。牠沒有口和腸道，而是把根狀組織伸入骨內，靠共生細菌分解營養。","hint1":"醫學","hint2":"歷史","hint3":"動物","correctHintIndex":3},{"id":4,"word":"石棚墓","answer":"石棚墓是由直立巨石支撐巨大石板形成的史前墓葬，外形像石桌。原本可能覆有土丘，但泥土流失後只剩石構骨架。","hint1":"歷史","hint2":"植物","hint3":"工程","correctHintIndex":1},{"id":5,"word":"葉羊","answer":"葉羊是一種外形像卡通綿羊的海蛞蝓。牠吸食藻類後能把葉綠體保留在體內，短時間利用光合作用產生能量。","hint1":"服裝","hint2":"動物","hint3":"美食","correctHintIndex":2},{"id":6,"word":"甕棺","answer":"甕棺是以大型陶甕作為葬具的器物，遺體或骨灰會放入其中埋葬。不同古代文化皆曾使用，尤其常見於嬰幼兒或二次葬。","hint1":"工藝","hint2":"飲品","hint3":"歷史","correctHintIndex":3},{"id":7,"word":"六角恐龍","answer":"六角恐龍是墨西哥鈍口螈的通行俗稱。牠終生保留幼體外鰓，不會完全變成陸棲蠑螈，並能再生四肢及部分器官。","hint1":"動物","hint2":"神話","hint3":"玩具","correctHintIndex":1},{"id":8,"word":"棄嬰輪","answer":"棄嬰輪是設在修道院或育嬰機構牆上的旋轉木箱。父母可匿名把嬰兒放入，轉動箱體後由內部人員接收和照顧。","hint1":"工程","hint2":"歷史","hint3":"宗教","correctHintIndex":2},{"id":9,"word":"洛倫齊尼壺腹","answer":"洛倫齊尼壺腹是鯊魚和魟魚頭部的電感受器，能偵測獵物肌肉產生的微弱電場，也可能協助牠們利用地球磁場導航。","hint1":"建築","hint2":"飲品","hint3":"動物","correctHintIndex":3},{"id":10,"word":"冬宮貓","answer":"冬宮貓是生活在俄羅斯冬宮博物館地下室的貓群。牠們最初被飼養來控制鼠患，後來成為博物館的傳統，並由專人照顧。","hint1":"歷史","hint2":"動物","hint3":"服裝","correctHintIndex":1},{"id":11,"word":"尾誘","answer":"尾誘是捕食者利用尾部外形或動作模仿獵物食物的行為。蜘蛛尾角蝰會擺動似蜘蛛的尾端，引誘鳥類靠近後突然攻擊。","hint1":"珠寶","hint2":"動物","hint3":"軍事","correctHintIndex":2},{"id":12,"word":"富勒烯","answer":"富勒烯是由碳原子組成的中空籠狀分子。最著名的碳六十分子外形近似足球，由五邊形和六邊形結構連接而成。","hint1":"軍事","hint2":"美食","hint3":"化學","correctHintIndex":3},{"id":13,"word":"椰子蟹","answer":"椰子蟹是體形最大的陸生節肢動物之一，具有強壯螯足並善於攀爬。牠能撕開椰子，也會取食水果、腐肉和其他食物。","hint1":"動物","hint2":"美食","hint3":"交通","correctHintIndex":1},{"id":14,"word":"糖蜜洪災","answer":"糖蜜洪災發生於一九一九年波士頓，一座大型糖蜜儲槽突然破裂。黏稠糖蜜形成高速洪流，摧毀建築並造成嚴重傷亡。","hint1":"美食","hint2":"歷史","hint3":"建築","correctHintIndex":2},{"id":15,"word":"鯪鯉","answer":"鯪鯉是穿山甲的古稱，屬於全身覆有角質鱗片的哺乳動物。牠受威脅時會捲成球，主要以長舌捕食螞蟻和白蟻。","hint1":"武術","hint2":"建築","hint3":"動物","correctHintIndex":3},{"id":16,"word":"鐵磁流體","answer":"鐵磁流體是混入極微細磁性粒子的液體。受到磁場影響時，液面會沿磁力線形成尖峰，因此常見於科學展示、密封及散熱技術。","hint1":"工程","hint2":"軍事","hint3":"美容","correctHintIndex":1},{"id":17,"word":"豎琴海綿","answer":"豎琴海綿是一種生活在深海的肉食性海綿，身體分枝像豎琴。它利用帶鉤細絲捕捉小型甲殼動物，再包裹並消化獵物。","hint1":"音樂","hint2":"動物","hint3":"家居","correctHintIndex":2},{"id":18,"word":"天葬","answer":"天葬是部分藏族和中亞文化的喪葬方式，把遺體交由禿鷹取食。其背後包含身體回歸自然、布施和靈魂離開肉身的觀念。","hint1":"交通","hint2":"農業","hint3":"歷史","correctHintIndex":3},{"id":19,"word":"蜜罐蟻","answer":"蜜罐蟻是把部分工蟻當作活體食物庫的螞蟻。這些工蟻會吸入大量蜜露，使腹部脹大並懸掛巢中，缺糧時再反芻餵食同伴。","hint1":"動物","hint2":"工藝","hint3":"文學","correctHintIndex":1},{"id":20,"word":"黑盒子","answer":"黑盒子是飛機上的飛行資料及駕駛艙語音記錄器，實際外殼通常塗成鮮橙色。它能承受撞擊、高溫和水壓，協助調查事故原因。","hint1":"心理學","hint2":"航空","hint3":"魔術","correctHintIndex":2},{"id":21,"word":"玻璃蛙","answer":"玻璃蛙是一類生活在中南美洲的樹蛙，部分品種腹部皮膚近乎透明。從下方觀察時，可以看到心臟、肝臟等部分內部器官。","hint1":"工藝","hint2":"攝影","hint3":"動物","correctHintIndex":3},{"id":22,"word":"舟葬","answer":"舟葬是以整艘船、船形棺木或獨木舟作為葬具的埋葬方式。船常象徵死者前往另一世界的旅程，也反映其身分地位。","hint1":"歷史","hint2":"交通","hint3":"宗教","correctHintIndex":1},{"id":23,"word":"雪蚤","answer":"雪蚤並不是真正的跳蚤，而是一類體形細小的彈尾目動物。牠們常在接近融化的雪面大量跳動，以藻類、真菌和腐植物為食。","hint1":"體育","hint2":"動物","hint3":"醫學","correctHintIndex":2},{"id":24,"word":"水躍","answer":"水躍是高速淺水流突然變成較慢深水流的現象，水面會形成明顯翻滾和浪牆。水利工程常利用它消耗能量，減少河床沖刷。","hint1":"舞蹈","hint2":"交通","hint3":"物理","correctHintIndex":3},{"id":25,"word":"狼蛛鷹","answer":"狼蛛鷹不是鳥類，而是一類大型蛛蜂。雌蜂會用毒針麻痺狼蛛，再把獵物拖進洞穴產卵，孵化後的幼蟲會以狼蛛為食。","hint1":"動物","hint2":"軍事","hint3":"體育","correctHintIndex":1},{"id":26,"word":"笑疫","answer":"笑疫是一九六二年坦噶尼喀一所學校開始的集體失控笑聲事件，之後傳到多個社區。它通常被解釋為群體心因性疾病。","hint1":"戲劇","hint2":"歷史","hint3":"美食","correctHintIndex":2},{"id":27,"word":"蟻浴","answer":"蟻浴是鳥類讓螞蟻爬上羽毛，或用嘴把螞蟻擦在身上的行為。螞蟻釋出的蟻酸可能有助驅除寄生蟲或整理羽毛。","hint1":"宗教","hint2":"旅遊","hint3":"動物","correctHintIndex":3},{"id":28,"word":"甕城","answer":"甕城是設於城門外或內側的附加防禦空間，敵人進入後會被城牆包圍，守軍可從多個方向攻擊，因形似甕而得名。","hint1":"建築","hint2":"工藝","hint3":"軍事","correctHintIndex":1},{"id":29,"word":"炸彈甲蟲","answer":"炸彈甲蟲受威脅時，會在腹部反應室混合化學物質，向外噴出接近沸點的刺激液體和蒸氣，以嚇退捕食者。","hint1":"軍事","hint2":"動物","hint3":"飲品","correctHintIndex":2},{"id":30,"word":"人類動物園","answer":"人類動物園是殖民時代把非西方族群安排在展覽場地，供觀眾以異國奇觀方式觀看的做法，反映當時的種族主義和權力不平等。","hint1":"動物","hint2":"文學","hint3":"歷史","correctHintIndex":3},{"id":31,"word":"巢寄生","answer":"巢寄生是把卵產在其他動物巢中，讓宿主代為孵化和餵養的策略。杜鵑雛鳥甚至可能把宿主原有的卵或幼鳥推出巢外。","hint1":"動物","hint2":"法律","hint3":"建築","correctHintIndex":1},{"id":32,"word":"廊橋","answer":"廊橋是在橋面上加建屋頂和側牆的橋樑。覆蓋結構可保護木製橋身免受雨雪侵蝕，也為行人提供停留和交易空間。","hint1":"法律","hint2":"建築","hint3":"舞蹈","correctHintIndex":2},{"id":33,"word":"磁感","answer":"磁感是動物感知地球磁場方向或強度的能力。候鳥、海龜和部分昆蟲可能利用它辨認方位，完成長距離遷徙。","hint1":"經濟","hint2":"音樂","hint3":"動物","correctHintIndex":3},{"id":34,"word":"兒童十字軍","answer":"兒童十字軍是十三世紀歐洲出現的群眾宗教運動，參與者多為年輕人和貧民，企圖前往聖地；史料細節仍存在爭議。","hint1":"歷史","hint2":"宗教","hint3":"遊戲","correctHintIndex":1},{"id":35,"word":"指猴","answer":"指猴是馬達加斯加的夜行靈長類，擁有特別細長的中指。牠會敲擊樹木尋找空洞，再用中指勾出藏在木內的幼蟲。","hint1":"音樂","hint2":"動物","hint3":"宗教","correctHintIndex":2},{"id":36,"word":"馬面牆","answer":"馬面牆是古代城牆向外凸出的長方形防禦平台，守軍能從側面射擊接近牆根的敵人，補足城牆正面難以防守的死角。","hint1":"動物","hint2":"服裝","hint3":"建築","correctHintIndex":3},{"id":37,"word":"射水魚","answer":"射水魚會從口中噴出準確水柱，把停在水面上方枝葉的昆蟲擊落。牠能調整水柱速度，令水流在擊中時集中力量。","hint1":"動物","hint2":"軍事","hint3":"美食","correctHintIndex":1},{"id":38,"word":"鳥喙醫生","answer":"鳥喙醫生是後世最熟悉的瘟疫醫生形象。他們穿長袍並戴有長喙面具，喙內放香草和香料，源於當時疾病由惡臭傳播的觀念。","hint1":"動物","hint2":"歷史","hint3":"服裝","correctHintIndex":2},{"id":39,"word":"海豬","answer":"海豬是生活在深海平原的海參，身體柔軟而半透明，靠管足在海床行走。牠會吞食沉積物，吸收其中的有機碎屑。","hint1":"遊戲","hint2":"醫學","hint3":"動物","correctHintIndex":3},{"id":40,"word":"穹隅","answer":"穹隅是把方形空間過渡成圓形穹頂基座的三角曲面結構。它將穹頂重量傳向四角，常見於拜占庭及伊斯蘭建築。","hint1":"建築","hint2":"地理","hint3":"工藝","correctHintIndex":1},{"id":41,"word":"裸鼴鼠","answer":"裸鼴鼠是生活在地下的大型鼠形動物，群體具有類似蜂蟻的分工，由少數個體繁殖。牠亦能忍受低氧和高二氧化碳環境。","hint1":"建築","hint2":"動物","hint3":"法律","correctHintIndex":2},{"id":42,"word":"四害運動","answer":"四害運動是中國大躍進時期消滅老鼠、蒼蠅、蚊子和麻雀的群眾運動。大量捕殺麻雀破壞生態平衡，加劇農作物蟲害。","hint1":"農業","hint2":"醫學","hint3":"歷史","correctHintIndex":3},{"id":43,"word":"彈道舌頭","answer":"彈道舌頭是變色龍捕食時使用的高速構造。彈性組織先儲存能量，再把帶黏性的舌端迅速射出，速度遠超普通肌肉伸展。","hint1":"動物","hint2":"軍事","hint3":"語言","correctHintIndex":1},{"id":44,"word":"牛腿","answer":"牛腿是從牆或柱面向外突出的承重構件，作用類似托臂，可支撐樑、陽台或屋簷。名稱來自它斜伸而有力的外形。","hint1":"動物","hint2":"建築","hint3":"美食","correctHintIndex":2},{"id":45,"word":"卵食","answer":"卵食是動物吃掉同類或其他物種卵的行為。它可能用來補充營養、減少競爭，或在資源不足時淘汰部分後代。","hint1":"美食","hint2":"宗教","hint3":"動物","correctHintIndex":3},{"id":46,"word":"石船","answer":"石船是北歐史前墓葬中，把巨石排列成船形的紀念構造。中央或附近常埋有死者和陪葬品，象徵航行、身分或死後旅程。","hint1":"歷史","hint2":"交通","hint3":"藝術","correctHintIndex":1},{"id":47,"word":"海天使","answer":"海天使是一類沒有外殼的游泳海螺，身體透明，利用一對翼狀足在海中拍動。雖然外形可愛，部分種類會捕食其他海螺。","hint1":"宗教","hint2":"動物","hint3":"舞蹈","correctHintIndex":2},{"id":48,"word":"捕風塔","answer":"捕風塔是中東傳統建築的通風結構，利用高處風口把涼風引入室內，並排走熱空氣，有些還配合地下水道進一步降溫。","hint1":"音樂","hint2":"自然","hint3":"建築","correctHintIndex":3},{"id":49,"word":"兔袋狸","answer":"兔袋狸是澳洲的有袋類動物，具有長耳、尖鼻和善於挖洞的前肢。牠多在夜間活動，主要食用昆蟲、種子和地下植物。","hint1":"動物","hint2":"服裝","hint3":"醫學","correctHintIndex":1},{"id":50,"word":"橫穴墓","answer":"橫穴墓是從山坡或崖壁水平挖入的古代墓室，入口通常連接短通道。內部可模仿地面住宅，並供同一家族多次埋葬。","hint1":"交通","hint2":"歷史","hint3":"醫學","correctHintIndex":2},{"id":51,"word":"水熊蟲","answer":"水熊蟲是體形微小、具有八條短腿的緩步動物。環境惡劣時可進入隱生狀態，降低代謝並耐受乾燥、低溫和輻射。","hint1":"美食","hint2":"法律","hint3":"動物","correctHintIndex":3},{"id":52,"word":"斗拱","answer":"斗拱是中國木構建築中位於柱與樑之間的層疊木件。它能傳遞屋頂重量、增加出簷距離，也具有鮮明裝飾效果。","hint1":"建築","hint2":"武術","hint3":"天文","correctHintIndex":1},{"id":53,"word":"魔鬼花螳螂","answer":"魔鬼花螳螂利用鮮艷花瓣般的身體和姿勢偽裝成花朵。牠既能躲避捕食者，也能誘使其他昆蟲靠近成為獵物。","hint1":"宗教","hint2":"動物","hint3":"舞蹈","correctHintIndex":2},{"id":54,"word":"大啤酒洪水","answer":"大啤酒洪水發生於一八一四年倫敦，巨型啤酒發酵槽破裂，引發連鎖崩塌。大量啤酒湧入街道和住宅，造成多人死亡。","hint1":"飲品","hint2":"自然","hint3":"歷史","correctHintIndex":3},{"id":55,"word":"吸血烏賊","answer":"吸血烏賊並不吸血，而是生活在低氧深海的小型頭足類。遇到威脅時會翻起腕間薄膜，或釋放發光黏液迷惑敵人。","hint1":"動物","hint2":"文學","hint3":"飲品","correctHintIndex":1},{"id":56,"word":"錨定效應","answer":"錨定效應是人作判斷時過度依賴最先接觸的數字或資訊。即使最初提示與問題無關，也可能拉高或壓低後續估計。","hint1":"交通","hint2":"心理學","hint3":"建築","correctHintIndex":2},{"id":57,"word":"藍龍海蛞蝓","answer":"藍龍海蛞蝓會漂浮在海面，捕食僧帽水母等帶刺胞動物。牠能保存獵物的刺細胞，遇敵時再用來防禦。","hint1":"神話","hint2":"珠寶","hint3":"動物","correctHintIndex":3},{"id":58,"word":"盲拱","answer":"盲拱是嵌在牆面上但沒有真正開口的拱形裝飾。它看似門窗，實際被牆封閉，可用來分割立面並營造節奏感。","hint1":"建築","hint2":"醫學","hint3":"體育","correctHintIndex":1},{"id":59,"word":"盲鰻","answer":"盲鰻是一類無顎的海洋脊椎動物，外形像鰻魚。遇到威脅時，牠能在數秒內分泌大量黏液，堵塞捕食者的口腔和鰓部。","hint1":"軍事","hint2":"動物","hint3":"醫學","correctHintIndex":2},{"id":60,"word":"跳舞瘟疫","answer":"跳舞瘟疫是十六世紀斯特拉斯堡大量居民不受控制地持續跳舞的事件。部分人跳至筋疲力盡，成因可能涉及群體心理壓力。","hint1":"舞蹈","hint2":"醫學","hint3":"歷史","correctHintIndex":3},{"id":61,"word":"海底拳王","answer":"海底拳王是螳螂蝦常見的媒體稱呼。部分種類以棒狀前肢高速敲擊硬殼獵物，並產生衝擊波與空化氣泡，造成雙重傷害。","hint1":"動物","hint2":"體育","hint3":"軍事","correctHintIndex":1},{"id":62,"word":"雞尾酒會效應","answer":"雞尾酒會效應是人在嘈雜環境中，仍能集中聆聽特定說話者的能力。同時，自己的名字等重要訊息仍可能突破注意力被察覺。","hint1":"飲品","hint2":"心理學","hint3":"音樂","correctHintIndex":2},{"id":63,"word":"葉海龍","answer":"葉海龍是海馬的近親，身體長有大量葉片狀附肢。這些構造不是用來游泳，而是令牠混入海草和海藻之中，避開捕食者。","hint1":"藝術","hint2":"軍事","hint3":"動物","correctHintIndex":3},{"id":64,"word":"光井","answer":"光井是建築內垂直貫通的狹長空間，用來把日光和空氣帶到較深或沒有外窗的房間，也可協助排煙和自然通風。","hint1":"建築","hint2":"攝影","hint3":"軍事","correctHintIndex":1},{"id":65,"word":"幽靈島","answer":"幽靈島是曾經出現在航海圖或地圖上，後來卻證實不存在的島嶼。成因包括雲霧誤認、位置記錄錯誤，以及地圖資料互相抄錄。","hint1":"文學","hint2":"地理","hint3":"遊戲","correctHintIndex":2},{"id":66,"word":"鬱金香狂熱","answer":"鬱金香狂熱是十七世紀荷蘭部分稀有鬱金香球根合約價格急升再崩跌的事件，常被引用為投機泡沫，但實際影響仍有爭議。","hint1":"植物","hint2":"宗教","hint3":"歷史","correctHintIndex":3},{"id":67,"word":"泥火山","answer":"泥火山是地下氣體、水和泥漿經裂隙被推到地表形成的地質構造。它通常溫度不高，與真正由岩漿噴發的火山不同。","hint1":"地理","hint2":"美食","hint3":"建築","correctHintIndex":1},{"id":68,"word":"沉沒成本謬誤","answer":"沉沒成本謬誤是因已投入無法收回的時間或金錢，仍繼續一項不划算計劃。理性決定應只比較未來成本和收益。","hint1":"經濟","hint2":"心理學","hint3":"體育","correctHintIndex":2},{"id":69,"word":"飛地","answer":"飛地是某國或行政區的一部分，與本土分離並被其他地區包圍。居民往返本土時，通常需要經過另一個國家或行政區。","hint1":"交通","hint2":"建築","hint3":"地理","correctHintIndex":3},{"id":70,"word":"Folly建築","answer":"Folly建築是園林或莊園中主要供觀賞、實用功能有限的奇趣建築，例如假城堡、仿古廢墟或異國塔樓，用來營造景觀氣氛。","hint1":"建築","hint2":"戲劇","hint3":"經濟","correctHintIndex":1},{"id":71,"word":"冰斗","answer":"冰斗是山地冰川在源頭侵蝕形成的半圓形凹地，三面多為陡壁，開口朝向山谷。冰川消退後，底部可能積水成冰斗湖。","hint1":"家居","hint2":"地理","hint3":"體育","correctHintIndex":2},{"id":72,"word":"死亡鐵路","answer":"死亡鐵路是二戰期間日軍強迫戰俘和亞洲勞工修建的泰緬鐵路。惡劣環境、疾病和虐待造成大量工人死亡，因此得名。","hint1":"交通","hint2":"遊戲","hint3":"歷史","correctHintIndex":3},{"id":73,"word":"殺手湖","answer":"殺手湖是湖底累積大量二氧化碳，突然翻湧釋放並沿地面擴散的火山湖。高濃度氣體可令附近人畜在不知不覺間窒息。","hint1":"地理","hint2":"文學","hint3":"旅遊","correctHintIndex":1},{"id":74,"word":"宜家效應","answer":"宜家效應是人們因親自組裝或製作物品，而高估其價值的心理現象。即使成品未必完美，投入的勞力仍會增加擁有感和喜愛程度。","hint1":"家居","hint2":"心理學","hint3":"藝術","correctHintIndex":2},{"id":75,"word":"妖精圈","answer":"妖精圈是乾旱草原上規則分布的圓形裸地，外圍通常長有較高的草。其成因仍有爭議，可能與植物爭奪水分或白蟻活動有關。","hint1":"舞蹈","hint2":"珠寶","hint3":"地理","correctHintIndex":3},{"id":76,"word":"鴿子塔","answer":"鴿子塔是專門讓大量鴿子棲息繁殖的建築，牆內設有成千上萬個巢穴。鴿糞可作肥料，鴿肉和蛋亦曾是重要資源。","hint1":"建築","hint2":"動物","hint3":"軍事","correctHintIndex":1},{"id":77,"word":"石林","answer":"石林是大量高聳尖銳岩柱密集分布的地貌，常由可溶性石灰岩長期受雨水侵蝕形成。遠看像由石頭組成的森林。","hint1":"藝術","hint2":"地理","hint3":"交通","correctHintIndex":2},{"id":78,"word":"神明裁判","answer":"神明裁判是古代以火、水或其他危險測試判定清白的方法，例如握熱鐵後觀察傷口。人們相信神會保護無罪者。","hint1":"宗教","hint2":"醫學","hint3":"法律","correctHintIndex":3},{"id":79,"word":"丹霞","answer":"丹霞是紅色砂岩和礫岩經抬升、風化與流水侵蝕形成的陡崖、石峰和峽谷地貌。岩層中的鐵氧化物令景觀呈紅色。","hint1":"地理","hint2":"藝術","hint3":"醫學","correctHintIndex":1},{"id":80,"word":"框架效應","answer":"框架效應是同一資訊用不同方式表達，便會改變人的選擇。例如強調成功率或失敗率，即使數字相同，也可能引起不同決定。","hint1":"建築","hint2":"心理學","hint3":"服裝","correctHintIndex":2},{"id":81,"word":"藍洞","answer":"藍洞是海岸或島嶼附近被海水淹沒的垂直洞穴，從空中看呈深藍色。部分藍洞連接地下洞穴，深度大且潛水風險很高。","hint1":"體育","hint2":"醫學","hint3":"地理","correctHintIndex":3},{"id":82,"word":"窯洞","answer":"窯洞是利用黃土崖壁或人工土坡挖出的居所，也可用拱形結構建造。厚實土層能保持室內冬暖夏涼，適合乾燥地區。","hint1":"建築","hint2":"工藝","hint3":"醫學","correctHintIndex":1},{"id":83,"word":"牛軛湖","answer":"牛軛湖是河流彎道被切斷後留下的弧形湖泊。洪水或侵蝕使河道改走較直路線，舊彎道兩端被泥沙封閉而成湖。","hint1":"物理","hint2":"地理","hint3":"美食","correctHintIndex":2},{"id":84,"word":"共同海損","answer":"共同海損是船舶遇險時，為拯救整體而有意犧牲部分貨物或支出費用後，由船東和貨主按價值比例共同分擔損失的制度。","hint1":"自然","hint2":"宗教","hint3":"法律","correctHintIndex":3},{"id":85,"word":"沸騰湖","answer":"沸騰湖是多米尼克一座受火山地熱加熱的火山口湖。湖水接近沸點，中央常冒出大量蒸氣，水溫和水位會隨地熱活動改變。","hint1":"地理","hint2":"美食","hint3":"醫學","correctHintIndex":1},{"id":86,"word":"基本歸因錯誤","answer":"基本歸因錯誤是解釋別人行為時，過度強調性格，低估情境影響。例如把遲到歸咎於懶惰，而忽略交通事故。","hint1":"法律","hint2":"心理學","hint3":"語言","correctHintIndex":2},{"id":87,"word":"莫霍面","answer":"莫霍面是地殼與地幔之間的分界，全名為莫霍洛維奇不連續面。地震波穿過這個位置時速度明顯改變，因此可用來推測地球內部結構。","hint1":"美容","hint2":"建築","hint3":"地理","correctHintIndex":3},{"id":88,"word":"雀替","answer":"雀替是中國傳統木構建築中，位於柱與樑交接處的短木構件。它能縮短樑的實際跨度，並常雕刻花鳥或幾何圖案。","hint1":"建築","hint2":"動物","hint3":"遊戲","correctHintIndex":1},{"id":89,"word":"蛇曲","answer":"蛇曲是河流在平坦地區形成的連續彎曲河道。外彎水流較快而侵蝕，內彎流速較慢並沉積，使彎道逐漸向側面移動。","hint1":"舞蹈","hint2":"地理","hint3":"職業","correctHintIndex":2},{"id":90,"word":"結構救濟","answer":"結構救濟是競爭法中直接改變企業結構的補救方式，例如出售業務或拆分公司，用來降低市場力量並恢復競爭，力度較行為限制強。","hint1":"建築","hint2":"醫學","hint3":"法律","correctHintIndex":3},{"id":91,"word":"河流襲奪","answer":"河流襲奪是一條河因侵蝕較快，切穿分水嶺並奪取鄰近河流上游水量的現象。被奪河道可能留下突然轉彎和乾谷。","hint1":"地理","hint2":"軍事","hint3":"法律","correctHintIndex":1},{"id":92,"word":"達克效應","answer":"達克效應指能力不足者有時因缺乏評估自身能力的知識，而高估表現；能力較高者亦可能低估任務對別人的難度。","hint1":"教育","hint2":"心理學","hint3":"體育","correctHintIndex":2},{"id":93,"word":"壺穴","answer":"壺穴是河床或岩石表面被旋轉砂石長期磨蝕而形成的圓形凹洞。水流令石塊在同一位置打轉，逐漸把洞穴磨深和擴大。","hint1":"工藝","hint2":"建築","hint3":"地理","correctHintIndex":3},{"id":94,"word":"風雨橋","answer":"風雨橋是中國侗族常見的有頂木橋，橋上設有長廊、座椅和亭閣。它不只供人過河，也可遮風避雨、休息和聚會。","hint1":"建築","hint2":"自然","hint3":"音樂","correctHintIndex":1},{"id":95,"word":"岩溶","answer":"岩溶是石灰岩等可溶岩石被微酸性水長期溶蝕形成的地貌，常見洞穴、天坑、地下河、峰林和石灰華等特殊景觀。","hint1":"音樂","hint2":"地理","hint3":"建築","correctHintIndex":2},{"id":96,"word":"戰利品法庭","answer":"戰利品法庭是審理戰時海上捕獲是否合法的法院，會判定被扣押的敵方或中立商船與貨物，能否依法成為捕獲國的戰利品。","hint1":"體育","hint2":"數學","hint3":"法律","correctHintIndex":3},{"id":97,"word":"月球天平動","answer":"月球天平動是月球從地球看來輕微搖擺的視覺現象。由於軌道和觀察角度改變，人類長期可看見約百分之五十九的月面。","hint1":"天文","hint2":"舞蹈","hint3":"交通","correctHintIndex":1},{"id":98,"word":"熱手謬誤","answer":"熱手謬誤是相信一個人連續成功後，下一次成功機率也會提高的判斷偏差。人們常把隨機連勝誤解為持續狀態或手感。","hint1":"體育","hint2":"心理學","hint3":"語言","correctHintIndex":2},{"id":99,"word":"大過濾器","answer":"大過濾器是假說中的一道或多道巨大障礙，使生命很難由簡單生物發展成星際文明。過濾器可能已在過去，也可能仍在未來。","hint1":"工程","hint2":"媒體","hint3":"天文","correctHintIndex":3},{"id":100,"word":"地坑院","answer":"地坑院是中國黃土高原的地下院落住宅。居民先向下挖出方形庭院，再在四周土壁開鑿窯洞，具有保溫和避風效果。","hint1":"建築","hint2":"農業","hint3":"美食","correctHintIndex":1},{"id":101,"word":"藍月","answer":"藍月通常指同一個曆月內出現的第二次滿月，另一傳統定義則是一季四次滿月中的第三次。它一般不會真的變成藍色。","hint1":"音樂","hint2":"天文","hint3":"飲品","correctHintIndex":2},{"id":102,"word":"破窗效應","answer":"破窗效應是一種犯罪學假說，認為環境中的失修和輕微違規若長期不處理，可能傳達無人管理的訊號，增加更多失序行為。","hint1":"建築","hint2":"醫學","hint3":"法律","correctHintIndex":3},{"id":103,"word":"凌日","answer":"凌日是較小天體從觀察者角度橫越較大天體圓面的現象，例如水星經過太陽前方。它可用來研究行星軌道和大氣成分。","hint1":"天文","hint2":"交通","hint3":"醫學","correctHintIndex":1},{"id":104,"word":"現狀偏差","answer":"現狀偏差是即使改變可能更有利，人們仍傾向保留目前選項。轉換成本、不確定感和害怕後悔，都會加強對現狀的偏好。","hint1":"政治","hint2":"心理學","hint3":"武術","correctHintIndex":2},{"id":105,"word":"月震","answer":"月震是發生在月球內部或表面的震動。成因包括地球潮汐拉力、隕石撞擊、月球內部活動，以及日夜溫差造成的岩石膨脹收縮。","hint1":"民俗","hint2":"服裝","hint3":"天文","correctHintIndex":3},{"id":106,"word":"飛扶壁","answer":"飛扶壁是哥德式建築外部的弧形支撐，把屋頂和拱頂的側推力傳到外側扶壁，使教堂能建得更高並開設大窗。","hint1":"建築","hint2":"交通","hint3":"醫學","correctHintIndex":1},{"id":107,"word":"潮汐鎖定","answer":"潮汐鎖定是天體自轉週期與公轉週期變得相同的狀態。因此月球永遠以近乎同一面朝向地球，背面並非永遠沒有陽光。","hint1":"法律","hint2":"天文","hint3":"心理學","correctHintIndex":2},{"id":108,"word":"決鬥審判","answer":"決鬥審判是讓爭議雙方或其代表以武力決鬥，由勝負判定案件結果的制度。它建立在神會讓正義一方獲勝的信念上。","hint1":"體育","hint2":"戲劇","hint3":"法律","correctHintIndex":3},{"id":109,"word":"對日照","answer":"對日照是夜空中位於太陽相反方向的微弱橢圓光斑。太陽光被行星際塵埃向後散射，才會在反太陽點附近形成這片淡光。","hint1":"天文","hint2":"攝影","hint3":"宗教","correctHintIndex":1},{"id":110,"word":"刺蝟困境","answer":"刺蝟困境以寒冷中的刺蝟互相取暖作比喻：靠得太遠會感到孤單，靠得太近又會彼此刺傷，象徵親密關係中的距離矛盾。","hint1":"動物","hint2":"心理學","hint3":"軍事","correctHintIndex":2},{"id":111,"word":"極光橢圓","answer":"極光橢圓是環繞地球南北磁極、最常出現極光的環形區域。太陽活動增強時，它會擴大並向較低緯度移動，使更多地方看見極光。","hint1":"數學","hint2":"藝術","hint3":"天文","correctHintIndex":3},{"id":112,"word":"紙上建築","answer":"紙上建築是主要存在於圖紙、模型或文字中的建築設計，未必打算實際興建。它常用來探索現實技術難以完成的空間和概念。","hint1":"建築","hint2":"宗教","hint3":"交通","correctHintIndex":1},{"id":113,"word":"阿爾貝多","answer":"阿爾貝多是物體表面反射入射光或太陽輻射的比例。白雪的阿爾貝多較高，能反射大量陽光；深色海面則會吸收較多能量。","hint1":"音樂","hint2":"天文","hint3":"歷史","correctHintIndex":2},{"id":114,"word":"善意救助者法","answer":"善意救助者法在部分地區保護自願緊急施救、且沒有重大疏忽的人，減低他們因合理救助失敗而承擔民事責任的風險。","hint1":"宗教","hint2":"醫學","hint3":"法律","correctHintIndex":3},{"id":115,"word":"晨昏線","answer":"晨昏線是行星表面白天與黑夜的分界線。從太空看，它會隨行星自轉移動；在地球兩極附近，季節會令其形狀和位置改變。","hint1":"天文","hint2":"交通","hint3":"攝影","correctHintIndex":1},{"id":116,"word":"自利偏差","answer":"自利偏差是把成功歸功於自己的能力和努力，卻把失敗歸咎於運氣、環境或他人。它有助維持自尊，但會妨礙客觀檢討。","hint1":"經濟","hint2":"心理學","hint3":"法律","correctHintIndex":2},{"id":117,"word":"日珥","answer":"日珥是由太陽磁場托住的高溫電漿結構，常像巨大火焰或拱橋伸出太陽邊緣。若爆發離開太陽，也可能影響太空天氣。","hint1":"音樂","hint2":"建築","hint3":"天文","correctHintIndex":3},{"id":118,"word":"希爾伯特旅館","answer":"希爾伯特旅館是說明無限集合的思想實驗。一間無限房間且全部客滿的旅館，仍可把每位客人移到下一房，騰出房間接待新客。","hint1":"數學","hint2":"旅遊","hint3":"文學","correctHintIndex":1},{"id":119,"word":"拉格朗日點","answer":"拉格朗日點是兩個大型天體引力與公轉運動達成平衡的特殊位置。太空船可在附近維持相對穩定，減少調整軌道所需燃料。","hint1":"音樂","hint2":"天文","hint3":"體育","correctHintIndex":2},{"id":120,"word":"役權","answer":"役權是某幅土地為另一幅土地提供特定使用利益的權利，例如通行、取水或鋪設管線。權利通常附隨土地，而非只屬某個人。","hint1":"地理","hint2":"醫學","hint3":"法律","correctHintIndex":3},{"id":121,"word":"日冕物質拋射","answer":"日冕物質拋射是太陽向太空噴出大量帶電粒子和磁場的事件。若噴射方向朝向地球，可能引發地磁暴、極光及衛星通訊干擾。","hint1":"天文","hint2":"管理","hint3":"醫學","correctHintIndex":1},{"id":122,"word":"麥高克效應","answer":"麥高克效應是眼睛看到的口型，改變耳朵對語音的理解。例如聲音和影像不一致時，大腦可能聽出第三種音節。","hint1":"電影","hint2":"心理學","hint3":"歷史","correctHintIndex":2},{"id":123,"word":"引力透鏡","answer":"引力透鏡是大質量天體彎曲周圍時空，使後方天體的光線改變路徑。影像可能被放大、拉成弧形，甚至分裂成多個像。","hint1":"攝影","hint2":"珠寶","hint3":"天文","correctHintIndex":3},{"id":124,"word":"最後通牒博弈","answer":"最後通牒博弈由一人提出如何分配一筆資源，另一人只能接受或拒絕。若拒絕，雙方都得不到任何東西，可用來研究公平感。","hint1":"數學","hint2":"政治","hint3":"體育","correctHintIndex":1},{"id":125,"word":"黃道光","answer":"黃道光是日出前或日落後沿黃道出現的三角形淡光。它並非大氣發光，而是太陽光被太陽系內的微細塵埃散射所形成。","hint1":"建築","hint2":"天文","hint3":"醫學","correctHintIndex":2},{"id":126,"word":"光權","answer":"光權是部分法律制度保障建築獲得一定自然採光的權益，鄰近工程若造成過度遮擋，可能受到高度、距離或賠償方面的限制。","hint1":"攝影","hint2":"天文","hint3":"法律","correctHintIndex":3},{"id":127,"word":"費米悖論","answer":"費米悖論指出，宇宙廣大而古老，理應有機會出現大量外星文明，但人類至今沒有發現明確證據，因此形成看似矛盾的問題。","hint1":"天文","hint2":"文學","hint3":"宗教","correctHintIndex":1},{"id":128,"word":"代表性捷思","answer":"代表性捷思是根據某人或事件有多像典型印象來判斷機率，卻忽略實際比例和樣本大小，容易造成刻板推斷。","hint1":"政治","hint2":"心理學","hint3":"藝術","correctHintIndex":2},{"id":129,"word":"掩星","answer":"掩星是較近的天體從觀察者視線前經過，暫時遮住較遠天體的現象。天文學家可藉亮度變化研究天體大小、大氣或環狀結構。","hint1":"軍事","hint2":"魔術","hint3":"天文","correctHintIndex":3},{"id":130,"word":"德國坦克問題","answer":"德國坦克問題是利用少量連續序號樣本，估算某類物件總數的統計問題。名稱源於二戰時盟軍以德軍裝備序號推算坦克產量。","hint1":"數學","hint2":"軍事","hint3":"遊戲","correctHintIndex":1},{"id":131,"word":"奧伯斯佯謬","answer":"奧伯斯佯謬問的是：若宇宙無限、永恆而且到處都有恆星，為何夜空不是整片明亮？答案涉及宇宙年齡、膨脹和光的傳播限制。","hint1":"哲學","hint2":"天文","hint3":"攝影","correctHintIndex":2},{"id":132,"word":"無主物先占","answer":"無主物先占是對沒有所有人的物品，以先行占有方式取得所有權的原則。野生動物、遺棄物等是否適用，須視法律規定而定。","hint1":"旅遊","hint2":"農業","hint3":"法律","correctHintIndex":3},{"id":133,"word":"熱寂","answer":"熱寂是宇宙可能的遙遠終局：能量分布接近均勻，不再有足夠溫差做有用功。宇宙仍存在，但複雜活動逐漸停止。","hint1":"天文","hint2":"醫學","hint3":"宗教","correctHintIndex":1},{"id":134,"word":"選擇超載","answer":"選擇超載是選項太多時，決策反而變得困難的現象。人們可能延遲選擇、乾脆放棄，或選完後更容易懷疑自己的決定。","hint1":"交通","hint2":"心理學","hint3":"科技","correctHintIndex":2},{"id":135,"word":"太陽耀斑","answer":"太陽耀斑是太陽大氣中磁能突然釋放造成的強烈輻射爆發。高能光可在數分鐘到達地球，影響無線電通訊和太空人安全。","hint1":"攝影","hint2":"醫學","hint3":"天文","correctHintIndex":3},{"id":136,"word":"毛球定理","answer":"毛球定理指出，無法在球面上安排一個處處連續且永不為零的切向量場。形象地說，帶毛的球必定至少有一個旋渦或禿點。","hint1":"數學","hint2":"動物","hint3":"美容","correctHintIndex":1},{"id":137,"word":"洛希極限","answer":"洛希極限是天體附近的一段臨界距離。較小衛星若進入其中，潮汐力可能超過自身重力，把它撕裂並形成碎片或行星環。","hint1":"法律","hint2":"天文","hint3":"建築","correctHintIndex":2},{"id":138,"word":"紅旗法案","answer":"紅旗法案是十九世紀英國早期汽車規管的俗稱，曾要求機動車低速行駛，並由一人在前方步行揮旗警告其他道路使用者。","hint1":"交通","hint2":"服裝","hint3":"法律","correctHintIndex":3},{"id":139,"word":"火星塵魔","answer":"火星塵魔是火星表面受強烈日照加熱後形成的旋轉上升氣流。它會捲起塵土留下深色路徑，外形近似地球的小型旋風。","hint1":"天文","hint2":"家居","hint3":"舞蹈","correctHintIndex":1},{"id":140,"word":"峰終定律","answer":"峰終定律指出，人們回憶一段經歷時，主要受最強烈的時刻和最後一刻影響，而不是把整段過程中每一刻的感受平均計算。","hint1":"戶外","hint2":"心理學","hint3":"音樂","correctHintIndex":2},{"id":141,"word":"冰火山","answer":"冰火山不是噴出熔岩，而是把水、氨或甲烷等低溫物質噴到天體表面。它可能出現在冰冷衛星、矮行星或其他外太陽系天體。","hint1":"美食","hint2":"軍事","hint3":"天文","correctHintIndex":3},{"id":142,"word":"不完備性","answer":"不完備性指出，足夠強且一致的形式數學系統中，必定存在無法在系統內證明或否證的命題，系統亦不能完全證明自身一致。","hint1":"數學","hint2":"法律","hint3":"文學","correctHintIndex":1},{"id":143,"word":"日冕洞","answer":"日冕洞是太陽外層大氣中溫度和密度較低的區域，在極紫外線影像上顯得較暗。高速太陽風常從這些開放磁場區域流出。","hint1":"醫學","hint2":"天文","hint3":"旅遊","correctHintIndex":2},{"id":144,"word":"寒蟬效應","answer":"寒蟬效應是人們因害怕法律責任、懲罰或報復，而不敢行使言論或其他合法權利的現象，即使相關行為未必真的違法。","hint1":"自然","hint2":"動物","hint3":"法律","correctHintIndex":3},{"id":145,"word":"玻爾茲曼大腦","answer":"玻爾茲曼大腦是假想由宇宙隨機波動偶然形成的自覺大腦。它可能擁有虛假記憶，用來討論宇宙模型和觀察者可信度的問題。","hint1":"天文","hint2":"科技","hint3":"醫學","correctHintIndex":1},{"id":146,"word":"普魯斯特效應","answer":"普魯斯特效應是某種氣味突然喚起鮮明往事和情緒的現象。名稱來自普魯斯特小說中，角色因瑪德蓮蛋糕氣味回想童年。","hint1":"文學","hint2":"心理學","hint3":"美食","correctHintIndex":2},{"id":147,"word":"水晶蘭","answer":"水晶蘭是沒有葉綠素的白色植物，不能自行光合作用。它透過真菌網絡間接取得樹木製造的養分，因此常生長在陰暗森林。","hint1":"民間傳說","hint2":"科技","hint3":"植物","correctHintIndex":3},{"id":148,"word":"克萊因瓶","answer":"克萊因瓶是拓撲學中的單面曲面，理論上沒有明確的內部和外部。它無法在三維空間完整製作，常見模型必須讓瓶頸穿過瓶身。","hint1":"數學","hint2":"美食","hint3":"醫學","correctHintIndex":1},{"id":149,"word":"龍血樹","answer":"龍血樹是樹冠像雨傘的樹木，受傷後會流出深紅色樹脂，因而得名。樹脂曾被用作染料、顏料、香料和傳統藥材。","hint1":"神話","hint2":"植物","hint3":"醫學","correctHintIndex":2},{"id":150,"word":"動物審判","answer":"動物審判是中世紀至近代歐洲曾出現的法律程序，豬、老鼠或昆蟲可能因傷人或破壞農作物而被起訴、判刑或驅逐。","hint1":"動物","hint2":"宗教","hint3":"法律","correctHintIndex":3},{"id":151,"word":"感夜運動","answer":"感夜運動是植物葉片或花朵隨晝夜週期開合的現象。它通常由葉枕細胞水壓變化控制，而不是植物真正進入睡眠。","hint1":"植物","hint2":"舞蹈","hint3":"醫學","correctHintIndex":1},{"id":152,"word":"哲學殭屍","answer":"哲學殭屍是假想中外表、行為和人類完全相同，卻沒有任何主觀感受的存在。它用來討論意識能否只由物理過程完整解釋。","hint1":"醫學","hint2":"哲學","hint3":"經濟","correctHintIndex":2},{"id":153,"word":"舞草","answer":"舞草的小葉會受光線、溫度和聲音振動影響而快速轉動，看起來像隨音樂跳舞。較大的葉片則主要隨晝夜開合。","hint1":"舞蹈","hint2":"經濟","hint3":"植物","correctHintIndex":3},{"id":154,"word":"倖存者偏差","answer":"倖存者偏差是只分析成功留下的案例，忽略失敗或消失樣本而造成的判斷錯誤。例如只研究返航飛機，可能看不到真正致命的受損位置。","hint1":"心理學","hint2":"戶外","hint3":"經濟","correctHintIndex":1},{"id":155,"word":"猴麵包樹","answer":"猴麵包樹具有巨大粗壯的樹幹，能在雨季儲存大量水分，適應乾旱環境。部分種類可活上千年，果實亦可食用。","hint1":"建築","hint2":"植物","hint3":"飲品","correctHintIndex":2},{"id":156,"word":"模擬退火","answer":"模擬退火是借用金屬冷卻概念的最佳化方法。演算法初期容許接受較差答案以跳出局部最佳，之後逐步降低隨機性尋找穩定解。","hint1":"工藝","hint2":"美食","hint3":"數學","correctHintIndex":3},{"id":157,"word":"維納斯陷阱","answer":"維納斯陷阱是捕蠅草的別稱。牠的葉片形成捕蟲夾，獵物需在短時間內多次觸碰感覺毛，才會觸發葉片快速閉合。","hint1":"植物","hint2":"法律","hint3":"民間傳說","correctHintIndex":1},{"id":158,"word":"藍法","answer":"藍法是限制星期日或宗教安息日進行商業、售酒和娛樂活動的法例。部分地區至今仍保留其中一些規定，但內容差異很大。","hint1":"音樂","hint2":"法律","hint3":"飲品","correctHintIndex":2},{"id":159,"word":"尸花","answer":"尸花通常指巨花魔芋，其巨大花序會散發類似腐肉的氣味。這種氣味能吸引食腐甲蟲和蒼蠅前來，協助完成授粉。","hint1":"民俗","hint2":"美食","hint3":"植物","correctHintIndex":3},{"id":160,"word":"中文房間","answer":"中文房間是反駁「執行程式便等於理解」的思想實驗。房內的人按規則處理中文符號，即使回答正確，也未必明白文字意思。","hint1":"哲學","hint2":"建築","hint3":"動物","correctHintIndex":1},{"id":161,"word":"復活草","answer":"復活草是能承受極度乾燥的植物，缺水時捲縮成枯乾狀態。重新吸水後，細胞結構和代謝恢復，葉片便再次展開。","hint1":"宗教","hint2":"植物","hint3":"科技","correctHintIndex":2},{"id":162,"word":"承諾升級","answer":"承諾升級是明知計劃持續失敗，仍因已投入時間、金錢或聲譽而追加資源的傾向，希望證明先前決定並沒有錯。","hint1":"法律","hint2":"軍事","hint3":"心理學","correctHintIndex":3},{"id":163,"word":"離岸流","answer":"離岸流是海浪回流時形成的狹窄強水流，會把泳客快速帶離岸邊。遇上時不應逆流直游，應先平行海岸脫離水帶。","hint1":"海洋","hint2":"經濟","hint3":"交通","correctHintIndex":1},{"id":164,"word":"火腿三明治定理","answer":"火腿三明治定理指出，在三維空間中，總能用同一個平面把三個物體的體積各自平分，無論它們形狀和位置如何。","hint1":"美食","hint2":"數學","hint3":"醫學","correctHintIndex":2},{"id":165,"word":"海雪","answer":"海雪是海中有機碎屑持續向深海下沉的現象，成分包括浮游生物殘骸、排泄物和黏液。它是深海生物重要的食物及碳來源。","hint1":"美食","hint2":"戲劇","hint3":"海洋","correctHintIndex":3},{"id":166,"word":"藍鉛筆規則","answer":"藍鉛筆規則是合約法中的處理原則。法院可刪除違法或不可執行的條款，但只有在剩餘內容仍能獨立成立時，才可能保留其餘部分。","hint1":"法律","hint2":"藝術","hint3":"醫學","correctHintIndex":1},{"id":167,"word":"忒修斯之船","answer":"忒修斯之船是關於身分延續的哲學問題。如果一艘船的零件被逐一更換，最後沒有任何原件留下，它是否仍是原來那艘船？","hint1":"天文","hint2":"哲學","hint3":"交通","correctHintIndex":2},{"id":168,"word":"鴕鳥效應","answer":"鴕鳥效應是面對壞消息、風險或損失時，選擇不查看相關資訊的心理傾向。逃避能暫時減少不安，卻可能令問題進一步惡化。","hint1":"動物","hint2":"自然","hint3":"心理學","correctHintIndex":3},{"id":169,"word":"鹵水池","answer":"鹵水池是海底低窪處聚集的超高鹽度水體，密度大而不易與周圍海水混合，看似水下湖泊，邊緣可形成特殊生態。","hint1":"海洋","hint2":"體育","hint3":"飲品","correctHintIndex":1},{"id":170,"word":"哥德巴赫彗星","answer":"哥德巴赫彗星是把每個偶數能寫成兩個質數之和的方法數繪成圖表。數值形成帶狀尖尾外觀，因此被形容為一顆彗星。","hint1":"攝影","hint2":"數學","hint3":"文學","correctHintIndex":2},{"id":171,"word":"沉默螺旋","answer":"沉默螺旋是人們害怕被孤立，當認為自己的意見屬少數時便不願公開表達，令看似主流的聲音進一步變得更強。","hint1":"工程","hint2":"音樂","hint3":"社會","correctHintIndex":3},{"id":172,"word":"拉普拉斯妖","answer":"拉普拉斯妖是決定論思想中的假想智慧體。若它知道宇宙所有粒子的位置和動量，便能計算全部過去與未來，不留下偶然空間。","hint1":"哲學","hint2":"地理","hint3":"醫學","correctHintIndex":1},{"id":173,"word":"蔡格尼克效應","answer":"蔡格尼克效應是未完成或被中斷的任務，比已完成任務更容易留在記憶中的現象。心中持續的完成需要，會令相關內容反覆浮現。","hint1":"戲劇","hint2":"心理學","hint3":"遊戲","correctHintIndex":2},{"id":174,"word":"永夜帶","answer":"永夜帶是海洋中陽光無法到達的深度範圍，通常位於約一千米以下。這裡沒有光合作用，生物依靠下沉有機物或化能合成。","hint1":"旅遊","hint2":"神話","hint3":"海洋","correctHintIndex":3},{"id":175,"word":"莫比烏斯環","answer":"莫比烏斯環是把紙帶扭轉半圈後首尾相接形成的曲面。它只有一個面和一條邊，沿表面前進最終會回到起點另一側。","hint1":"數學","hint2":"服裝","hint3":"交通","correctHintIndex":1},{"id":176,"word":"玻璃天花板","answer":"玻璃天花板是看不見卻真實存在的職場障礙，使女性或少數群體即使具備能力，也較難升到高階管理或權力位置。","hint1":"建築","hint2":"社會","hint3":"工藝","correctHintIndex":2},{"id":177,"word":"骨教堂","answer":"骨教堂是以人類骨骸裝飾或存放遺骨的教堂或小堂。部分地方因墓地空間不足，會把舊骨重新排列成吊燈、圖案和祭壇。","hint1":"醫學","hint2":"武術","hint3":"宗教","correctHintIndex":3},{"id":178,"word":"旁觀者效應","answer":"旁觀者效應是緊急事件的目擊者愈多，個別人士有時愈不容易出手協助的現象，因為每個人都可能認為其他人會負責處理。","hint1":"心理學","hint2":"戲劇","hint3":"體育","correctHintIndex":1},{"id":179,"word":"內波","answer":"內波是在海水內部不同密度水層交界傳播的波，不一定令海面明顯起伏。它能搬運熱量、養分，也會影響潛艇和海洋生物。","hint1":"音樂","hint2":"海洋","hint3":"醫學","correctHintIndex":2},{"id":180,"word":"四色定理","answer":"四色定理指出，任何平面地圖最多只需四種顏色，便能讓共用一段邊界的地區顏色不同。只在一點接觸不算相鄰。","hint1":"藝術","hint2":"政治","hint3":"數學","correctHintIndex":3},{"id":181,"word":"愛之鎖","answer":"愛之鎖是情侶把寫有姓名的鎖掛在橋樑或欄杆，象徵感情長久的習俗。大量鎖具會增加結構負荷，因此不少城市定期拆除。","hint1":"社會","hint2":"珠寶","hint3":"攝影","correctHintIndex":1},{"id":182,"word":"假門","answer":"假門是古埃及墓葬和神廟中雕刻在牆上的象徵性門口，並不能真正通行。古人相信亡者靈魂可藉此往返人間與來世。","hint1":"法律","hint2":"宗教","hint3":"交通","correctHintIndex":2},{"id":183,"word":"頻率錯覺","answer":"頻率錯覺是剛認識一個詞或事物後，突然覺得它到處出現的現象。實際頻率未必增加，只是注意力和確認偏誤令它更突出。","hint1":"媒體","hint2":"宗教","hint3":"心理學","correctHintIndex":3},{"id":184,"word":"假海床","answer":"假海床是早期聲納對深層散射層的誤判。大量魚、蝦和浮游生物反射聲波，看似海床，並會在夜間上升、白天下沉。","hint1":"海洋","hint2":"軍事","hint3":"建築","correctHintIndex":1},{"id":185,"word":"謝林點","answer":"謝林點是在無法溝通時，參與者因共同文化或直覺而選擇的顯眼方案。例如約人失聯後，大家可能自然前往最著名地標會合。","hint1":"地理","hint2":"數學","hint3":"音樂","correctHintIndex":2},{"id":186,"word":"古德哈特定律","answer":"古德哈特定律指出，當某個衡量指標成為被追逐的目標，人們便會設法迎合數字，令該指標失去原本反映真實表現的能力。","hint1":"醫學","hint2":"建築","hint3":"管理","correctHintIndex":3},{"id":187,"word":"沉默之塔","answer":"沉默之塔是祆教傳統的圓形露天喪葬建築，遺體放在塔頂讓禿鷹處理，以避免屍體污染被視為神聖的土和火。","hint1":"宗教","hint2":"建築","hint3":"天文","correctHintIndex":1},{"id":188,"word":"控制錯覺","answer":"控制錯覺是人們高估自己能影響隨機或不可控結果的傾向，例如用力擲骰、選擇彩票號碼後，便覺得勝算有所提高。","hint1":"工程","hint2":"心理學","hint3":"魔術","correctHintIndex":2},{"id":189,"word":"涌潮","answer":"涌潮是漲潮海水形成明顯浪頭，逆著河流向上游推進的現象。它多出現在漏斗形河口，潮差大和河道變窄會增強浪勢。","hint1":"交通","hint2":"經濟","hint3":"海洋","correctHintIndex":3},{"id":190,"word":"蒙提霍爾問題","answer":"蒙提霍爾問題是三門選獎品的機率題。主持人知道答案並打開一扇空門後，玩家若改選另一扇未開門，勝率會由三分之一升至三分之二。","hint1":"數學","hint2":"遊戲","hint3":"心理學","correctHintIndex":1},{"id":191,"word":"綠色郵件","answer":"綠色郵件是投資者大量買入公司股票並威脅收購，迫使公司以溢價回購其持股。投資者獲利離場，但其他股東未必得到同等待遇。","hint1":"交通","hint2":"管理","hint3":"自然","correctHintIndex":2},{"id":192,"word":"屍體審判","answer":"屍體審判是公元八九七年羅馬教廷把已故教宗福慕薩的遺體挖出，穿上法衣接受審訊，之後宣判其任職無效的事件。","hint1":"法律","hint2":"地理","hint3":"宗教","correctHintIndex":3},{"id":193,"word":"賭徒謬誤","answer":"賭徒謬誤是認為隨機結果連續出現後，相反結果便「應該」更快到來。例如硬幣連出多次正面，不代表下一次反面機率增加。","hint1":"心理學","hint2":"遊戲","hint3":"數學","correctHintIndex":1},{"id":194,"word":"死水效應","answer":"死水效應是船在上下密度不同的水層中航行時，把能量耗在產生內波，導致船隻突然減速，像被看不見的力量拖住。","hint1":"心理學","hint2":"海洋","hint3":"旅遊","correctHintIndex":2},{"id":195,"word":"蒙地卡羅方法","answer":"蒙地卡羅方法利用大量隨機抽樣估算難以直接計算的結果，可應用於物理、金融和工程。名稱取自以賭場聞名的蒙地卡羅。","hint1":"遊戲","hint2":"地理","hint3":"數學","correctHintIndex":3},{"id":196,"word":"灰犀牛","answer":"灰犀牛是指非常明顯、發生機率高，而且可能造成重大衝擊的風險。人們通常知道它存在，卻因拖延、僥倖或利益衝突而不處理。","hint1":"管理","hint2":"動物","hint3":"數學","correctHintIndex":1},{"id":197,"word":"安卡十字","answer":"安卡十字是古埃及象形符號，上方呈環形，下方像十字，代表生命或永生。神祇常被畫成手持安卡，將生命賜予法老。","hint1":"醫學","hint2":"宗教","hint3":"建築","correctHintIndex":2},{"id":198,"word":"可得性捷思","answer":"可得性捷思是根據某件事多容易被想起，判斷其發生機率。新聞密集報道的罕見事故，可能因此被誤以為非常常見。","hint1":"交通","hint2":"教育","hint3":"心理學","correctHintIndex":3},{"id":199,"word":"霜花","answer":"霜花是新形成的海冰表面長出的羽毛狀冰晶。當冰面上方空氣寒冷而潮濕時，水氣直接凝華，形成含有高濃度海鹽的晶體。","hint1":"海洋","hint2":"工藝","hint3":"消防","correctHintIndex":1},{"id":200,"word":"生日悖論","answer":"生日悖論指出，在只有二十三人的群體中，至少兩人同生日的機率已超過一半。原因是要比較的不是某一人的生日，而是所有人配對。","hint1":"民俗","hint2":"數學","hint3":"醫學","correctHintIndex":2},{"id":201,"word":"黃金降落傘","answer":"黃金降落傘是高層在公司被收購或失去職位時，可獲得的大額補償安排。支持者稱可保持獨立判斷，批評者則認為待遇過厚。","hint1":"交通","hint2":"宗教","hint3":"管理","correctHintIndex":3},{"id":202,"word":"靈塔","answer":"靈塔是安置高僧或宗教人物遺體、骨灰和舍利的佛塔，既是墓葬標誌，也是信眾瞻仰、紀念和進行宗教活動的場所。","hint1":"宗教","hint2":"建築","hint3":"軍事","correctHintIndex":1},{"id":203,"word":"規劃謬誤","answer":"規劃謬誤是低估完成任務所需時間、成本和風險的傾向。即使過往多次延誤，人們仍常以最理想情況預測新計劃。","hint1":"建築","hint2":"心理學","hint3":"法律","correctHintIndex":2},{"id":204,"word":"黑煙囪","answer":"黑煙囪是深海熱液噴口形成的煙囪狀礦物結構。高溫流體遇到冰冷海水後，金屬硫化物沉澱，看起來像噴出黑煙。","hint1":"工程","hint2":"音樂","hint3":"海洋","correctHintIndex":3},{"id":205,"word":"囚徒困境","answer":"囚徒困境中，兩名參與者各自選擇合作或背叛。個人理性可能令雙方都背叛，結果反而比互相合作更差，展示利益衝突。","hint1":"數學","hint2":"法律","hint3":"心理學","correctHintIndex":1},{"id":206,"word":"帕累托前沿","answer":"帕累托前沿是多目標最佳化中的一組方案。在這些方案上，若要改善其中一個目標，就必須犧牲至少另一個目標的表現。","hint1":"地理","hint2":"管理","hint3":"服裝","correctHintIndex":2},{"id":207,"word":"石頭湯","answer":"石頭湯是一則流傳多地的民間故事，旅人聲稱只用石頭煮湯，引導村民逐一分享食材，最後共同煮成一鍋真正的湯。","hint1":"美食","hint2":"地理","hint3":"文學","correctHintIndex":3},{"id":208,"word":"微眠","answer":"微眠是只持續數秒的短暫睡眠，當事人可能毫無察覺，眼睛甚至仍張開。它常由嚴重睡眠不足引起，駕駛時尤其危險。","hint1":"醫學","hint2":"科技","hint3":"交通","correctHintIndex":1},{"id":209,"word":"冷泉","answer":"冷泉是海床上甲烷、硫化氫等低溫流體緩慢滲出的地方。當地生物多依靠化學合成獲取能量，不需要陽光維持食物鏈。","hint1":"經濟","hint2":"海洋","hint3":"醫學","correctHintIndex":2},{"id":210,"word":"康威生命遊戲","answer":"康威生命遊戲是一種細胞自動機。方格只按鄰居數量決定生存、死亡或誕生，卻能演化出移動圖案、循環結構，甚至模擬計算。","hint1":"遊戲","hint2":"生物","hint3":"數學","correctHintIndex":3},{"id":211,"word":"白武士","answer":"白武士是公司面臨敵意收購時，主動尋找的較友善收購者。董事會寧願由白武士接管，以避免落入原收購方控制。","hint1":"管理","hint2":"遊戲","hint3":"出版","correctHintIndex":1},{"id":212,"word":"達摩克利斯之劍","answer":"達摩克利斯之劍源自古希臘故事，一把劍僅以馬鬃懸在權貴頭頂。它用來比喻身處權力與榮華之中，也同時承受巨大危險。","hint1":"軍事","hint2":"文學","hint3":"數學","correctHintIndex":2},{"id":213,"word":"雪視症","answer":"雪視症是視野持續出現像舊電視雜訊般細小閃點的神經視覺障礙。患者亦可能畏光、看見殘影或在黑暗中視覺更差。","hint1":"自然","hint2":"攝影","hint3":"醫學","correctHintIndex":3},{"id":214,"word":"密度瀑布","answer":"密度瀑布是較冷、較鹹或夾帶沉積物的高密度海水沿海床下沉的水流，看似海底瀑布，實際上全程仍在水中流動。","hint1":"海洋","hint2":"建築","hint3":"旅遊","correctHintIndex":1},{"id":215,"word":"巴拿赫－塔斯基悖論","answer":"巴拿赫－塔斯基悖論指出，數學上可把一個實心球分成有限個特殊集合，再只靠旋轉和平移，重組成兩個與原球同大的球。","hint1":"舞蹈","hint2":"數學","hint3":"經濟","correctHintIndex":2},{"id":216,"word":"彼得原理","answer":"彼得原理指出，階級組織中的員工常因現職表現良好而不斷升職，最後升到自己無法勝任的位置，並可能長期停留在該職位。","hint1":"美食","hint2":"醫學","hint3":"管理","correctHintIndex":3},{"id":217,"word":"無義詩","answer":"無義詩故意使用荒誕情節、自創詞語和不合邏輯的句子，但仍保持節奏與語法感。作品重點在聲音、想像和幽默，而非現實意義。","hint1":"文學","hint2":"法律","hint3":"醫學","correctHintIndex":1},{"id":218,"word":"幻肢","answer":"幻肢是肢體截除後，患者仍感覺該部位存在的現象。幻肢可以有姿勢、溫度、痕癢或疼痛感，原因與大腦身體地圖仍然保留有關。","hint1":"工程","hint2":"醫學","hint3":"舞蹈","correctHintIndex":2},{"id":219,"word":"黑皇后假說","answer":"黑皇后假說認為微生物可能在群體中失去某些成本高昂但可由鄰居提供的功能，形成彼此依賴，以減少自身維持基因的負擔。","hint1":"遊戲","hint2":"服裝","hint3":"生物","correctHintIndex":3},{"id":220,"word":"柯尼斯堡七橋","answer":"柯尼斯堡七橋問題問能否一次走過城市七座橋且每座只走一次。歐拉證明不可能，並由此奠定圖論和拓撲思考的基礎。","hint1":"數學","hint2":"歷史","hint3":"戲劇","correctHintIndex":1},{"id":221,"word":"熊抱收購","answer":"熊抱收購是潛在買家向目標公司提出遠高於市價的公開收購建議，令董事會難以拒絕，否則可能被股東指責沒有爭取最佳利益。","hint1":"動物","hint2":"管理","hint3":"武術","correctHintIndex":2},{"id":222,"word":"馮諾依曼探測器","answer":"馮諾依曼探測器是能自我複製的假想太空探測器。它抵達星系後利用當地資源製造副本，讓探測範圍以倍增方式擴展。","hint1":"醫學","hint2":"物理","hint3":"文學","correctHintIndex":3},{"id":223,"word":"臉盲症","answer":"臉盲症又稱面孔失認症，患者視力可以正常，卻難以辨認熟悉面孔。有人會改用聲音、髮型或走路姿勢辨認他人。","hint1":"醫學","hint2":"攝影","hint3":"禮儀","correctHintIndex":1},{"id":224,"word":"穆勒氏擬態","answer":"穆勒氏擬態是多種有毒或難吃的物種演化出相似警戒外觀。捕食者只需學習一次教訓，所有相似物種都能共同受益。","hint1":"法律","hint2":"生物","hint3":"音樂","correctHintIndex":2},{"id":225,"word":"康托爾對角線論證","answer":"康托爾對角線論證透過逐位修改清單中的數字，構造出不在清單的新數，從而證明實數無法逐一列出，數量多於自然數。","hint1":"工藝","hint2":"家居","hint3":"數學","correctHintIndex":3},{"id":226,"word":"魚骨圖","answer":"魚骨圖是分析問題成因的管理工具，把結果寫在魚頭，再把人員、方法、設備和材料等可能原因分支排列，協助找出根本問題。","hint1":"管理","hint2":"生物","hint3":"醫學","correctHintIndex":1},{"id":227,"word":"回文詩","answer":"回文詩是正讀和倒讀都能形成有意義內容的詩文。部分作品按字反讀，另一些則利用句序、行序或特殊排版完成。","hint1":"數學","hint2":"文學","hint3":"歷史","correctHintIndex":2},{"id":228,"word":"皮膚寫字症","answer":"皮膚寫字症是皮膚受到輕微抓劃後，迅速出現隆起紅痕的蕁麻疹反應。痕跡像文字浮在皮膚上，通常會在短時間內消退。","hint1":"文學","hint2":"藝術","hint3":"醫學","correctHintIndex":3},{"id":229,"word":"生殖劫持","answer":"生殖劫持是寄生物破壞或抑制宿主繁殖，並把宿主原本用於生殖的能量轉為自身生長。部分寄生甲殼類和扁蟲會如此。","hint1":"生物","hint2":"法律","hint3":"政治","correctHintIndex":1},{"id":230,"word":"貝特朗悖論","answer":"貝特朗悖論指出，在圓內隨機畫一條弦時，弦長超過內接等邊三角形邊長的機率，會因「隨機畫弦」的定義不同而改變。","hint1":"語言","hint2":"數學","hint3":"醫學","correctHintIndex":2},{"id":231,"word":"眼鏡蛇效應","answer":"眼鏡蛇效應是政策誘因令問題反而惡化的情況。名稱源於政府懸賞死蛇後，有人刻意養蛇領賞，政策取消時再把蛇大量放生。","hint1":"醫學","hint2":"物理","hint3":"管理","correctHintIndex":3},{"id":232,"word":"具象詩","answer":"具象詩是利用文字排列、字體和留白塑造圖像的詩歌形式。作品的外觀會配合內容，例如把與雨有關的文字排成下落形狀。","hint1":"文學","hint2":"醫學","hint3":"軍事","correctHintIndex":1},{"id":233,"word":"愛麗絲夢遊仙境症候群","answer":"愛麗絲夢遊仙境症候群是一種神經感知異常。患者可能覺得自己或物件突然變大、變小、變近或變遠，但實際尺寸並沒有改變。","hint1":"文學","hint2":"醫學","hint3":"宗教","correctHintIndex":2},{"id":234,"word":"紅皇后假說","answer":"紅皇后假說認為物種必須持續演化，才能在競爭、捕食和寄生關係中維持原有生存位置，像不停奔跑卻只能留在原地。","hint1":"歷史","hint2":"體育","hint3":"生物","correctHintIndex":3},{"id":235,"word":"美元拍賣","answer":"美元拍賣規定最高和第二高出價者都要付款，但只有最高者得到獎品。參與者為避免先前出價白費，可能把價格競投到超過獎品價值。","hint1":"數學","hint2":"收藏","hint3":"宗教","correctHintIndex":1},{"id":236,"word":"黑天鵝","answer":"黑天鵝是指發生機率看似極低、事前難以預測，卻會造成巨大影響的事件。事件發生後，人們往往又會用理由解釋成其實早有跡象。","hint1":"動物","hint2":"管理","hint3":"舞蹈","correctHintIndex":2},{"id":237,"word":"藏頭詩","answer":"藏頭詩把特定文字藏在每行詩句的開頭，依次讀出便形成名字、句子或訊息。類似技巧也可藏在行尾或句中。","hint1":"法律","hint2":"建築","hint3":"文學","correctHintIndex":3},{"id":238,"word":"長髮公主症候群","answer":"長髮公主症候群是胃內毛球延伸進入小腸的罕見情況，多與吞食毛髮有關。毛髮無法消化，可能造成腹痛、營養不良或腸阻塞。","hint1":"醫學","hint2":"文學","hint3":"美容","correctHintIndex":1},{"id":239,"word":"菌根網絡","answer":"菌根網絡由真菌菌絲連接植物根部形成。真菌協助植物取得水分和礦物質，植物則提供糖分，不同植物亦可能透過網絡交換物質。","hint1":"科技","hint2":"生物","hint3":"音樂","correctHintIndex":2},{"id":240,"word":"洛倫茲吸引子","answer":"洛倫茲吸引子是由簡化氣象方程產生的混沌軌跡，圖形像蝴蝶雙翼。軌跡永不完全重複，卻會被限制在特定形狀內。","hint1":"自然","hint2":"藝術","hint3":"數學","correctHintIndex":3},{"id":241,"word":"垃圾桶模型","answer":"垃圾桶模型把組織決策視為問題、答案、參與者和機會偶然碰在一起的結果。決策未必先有問題再找方案，而可能相當混亂。","hint1":"管理","hint2":"自然","hint3":"美食","correctHintIndex":1},{"id":242,"word":"伊卡洛斯之翼","answer":"伊卡洛斯之翼源自希臘神話，他以羽毛和蠟製成翅膀逃離囚禁，卻因飛得太近太陽令蠟融化，最終墜海身亡。","hint1":"交通","hint2":"神話","hint3":"醫學","correctHintIndex":2},{"id":243,"word":"外國口音症候群","answer":"外國口音症候群是腦部受傷或中風後出現的罕見語音障礙。患者原本的發音節奏改變，令旁人誤以為他突然帶有外國口音。","hint1":"政治","hint2":"戲劇","hint3":"醫學","correctHintIndex":3},{"id":244,"word":"凍結耐受","answer":"凍結耐受是某些動物允許體內部分水分結冰仍能存活的能力。牠們會製造葡萄糖等保護物質，減少冰晶對細胞的破壞。","hint1":"生物","hint2":"建築","hint3":"飲品","correctHintIndex":1},{"id":245,"word":"中國郵差問題","answer":"中國郵差問題是圖論中的路線最佳化問題：從某點出發，走遍網絡中每條道路至少一次，再返回起點，並令整段路程盡可能短。","hint1":"法律","hint2":"數學","hint3":"職業","correctHintIndex":2},{"id":246,"word":"白象","answer":"白象是指建造或取得成本極高，維護費用龐大，實際用途卻有限的資產或工程。名稱源自珍貴白象難以轉送、飼養負擔沉重的故事。","hint1":"動物","hint2":"宗教","hint3":"經濟","correctHintIndex":3},{"id":247,"word":"阿里阿德涅之線","answer":"阿里阿德涅之線源自希臘神話，她給忒修斯一團線，讓他進入迷宮殺死牛頭怪後能沿線返回，現比喻解開複雜問題的線索。","hint1":"神話","hint2":"數學","hint3":"服裝","correctHintIndex":1},{"id":248,"word":"伍德燈","answer":"伍德燈是一種發出長波紫外線的醫療檢查燈。醫護人員會在暗室觀察皮膚產生的螢光，以協助判斷部分真菌感染或色素異常。","hint1":"工藝","hint2":"醫學","hint3":"戲劇","correctHintIndex":2},{"id":249,"word":"再生芽","answer":"再生芽是部分動物受傷後在斷面形成的細胞團，能重新分化並長出肢體或器官。蠑螈再生四肢時便會形成這種結構。","hint1":"工程","hint2":"醫學","hint3":"生物","correctHintIndex":3},{"id":250,"word":"選擇公理","answer":"選擇公理主張，對一族非空集合，可以從每個集合中各選一個元素，即使沒有明確選取規則。它能推出許多重要但反直覺的結果。","hint1":"數學","hint2":"政治","hint3":"法律","correctHintIndex":1},{"id":251,"word":"道德風險","answer":"道德風險是受到保險或他人承擔損失保護後，個人可能採取更高風險行為的問題，因為決策者不用承受全部後果。","hint1":"醫學","hint2":"經濟","hint3":"宗教","correctHintIndex":2},{"id":252,"word":"卡珊德拉詛咒","answer":"卡珊德拉詛咒源自希臘神話。她能準確預言未來，卻受到詛咒而永遠無人相信，後來用來形容正確警告被眾人忽視。","hint1":"醫學","hint2":"法律","hint3":"神話","correctHintIndex":3},{"id":253,"word":"失歌症","answer":"失歌症是一種音樂能力障礙，患者可能無法辨認熟悉旋律、分辨音高或準確唱歌，即使一般聽力和語言能力仍然正常。","hint1":"醫學","hint2":"音樂","hint3":"交通","correctHintIndex":1},{"id":254,"word":"自割","answer":"自割是動物主動脫落尾巴、肢體或其他身體部分以逃生的行為。斷落部位可吸引捕食者注意，部分物種日後能再生。","hint1":"法律","hint2":"生物","hint3":"醫學","correctHintIndex":2},{"id":255,"word":"蝴蝶效應","answer":"蝴蝶效應指複雜動態系統對初始條件極度敏感。開始時極微小的差異，經長期演化後可能造成完全不同的結果。","hint1":"生物","hint2":"舞蹈","hint3":"數學","correctHintIndex":3},{"id":256,"word":"窗戶稅","answer":"窗戶稅是按房屋窗戶數量徵收的歷史稅項。為減少稅款，屋主會封閉窗戶，結果令住宅採光和通風變差，影響公共健康。","hint1":"經濟","hint2":"建築","hint3":"攝影","correctHintIndex":1},{"id":257,"word":"塞壬","answer":"塞壬是希臘神話中以歌聲迷惑航海者的生物。水手若受吸引而駛近，船隻便可能撞上岩礁，因此歌聲象徵致命誘惑。","hint1":"交通","hint2":"神話","hint3":"醫學","correctHintIndex":2},{"id":258,"word":"鬼壓床","answer":"鬼壓床是睡眠癱瘓的俗稱。人在入睡或醒來時意識已清醒，但快速眼動睡眠的肌肉抑制仍未解除，因此暫時無法活動。","hint1":"民間傳說","hint2":"法律","hint3":"醫學","correctHintIndex":3},{"id":259,"word":"弓形蟲","answer":"弓形蟲是一種單細胞寄生生物，貓科動物是其終宿主。人類可經未熟肉類或受污染物感染，多數健康人士症狀輕微。","hint1":"生物","hint2":"心理學","hint3":"攝影","correctHintIndex":1},{"id":260,"word":"無限猴子定理","answer":"無限猴子定理指出，只要隨機敲擊鍵盤的時間無限長，幾乎必然會輸入任何指定文本。它是機率概念，並非真要使用猴子實驗。","hint1":"動物","hint2":"數學","hint3":"文學","correctHintIndex":2},{"id":261,"word":"逆向選擇","answer":"逆向選擇是交易前資訊不對稱造成的問題。風險較高或品質較差者更願意參與，可能令市場平均品質下降或保險成本上升。","hint1":"生物","hint2":"文學","hint3":"經濟","correctHintIndex":3},{"id":262,"word":"米達斯之觸","answer":"米達斯之觸源自希臘神話，國王米達斯獲得把接觸之物變成黃金的能力，卻連食物也無法入口，顯示貪婪願望的代價。","hint1":"神話","hint2":"經濟","hint3":"醫學","correctHintIndex":1},{"id":263,"word":"弗雷戈利妄想","answer":"弗雷戈利妄想患者相信不同人物其實是同一個人不斷變裝出現。它屬於妄想性錯認症候群，常伴隨被跟蹤或迫害的想法。","hint1":"戲劇","hint2":"醫學","hint3":"軍事","correctHintIndex":2},{"id":264,"word":"麴菌","answer":"麴菌是東亞發酵食品常用的真菌，能分泌酵素，把米、麥或豆類中的澱粉和蛋白質分解，製作醬油、味噌、清酒等食品。","hint1":"音樂","hint2":"工藝","hint3":"生物","correctHintIndex":3},{"id":265,"word":"獨裁者博弈","answer":"獨裁者博弈讓一名參與者自由決定如何分配資源，另一人沒有拒絕權。研究者藉此觀察人在沒有報復風險時是否仍願意分享。","hint1":"數學","hint2":"政治","hint3":"醫學","correctHintIndex":1},{"id":266,"word":"密西西比泡沫","answer":"密西西比泡沫是十八世紀法國投資者追捧美洲殖民貿易公司股票造成的泡沫。股價和紙幣信心崩潰後，引發嚴重金融混亂。","hint1":"地理","hint2":"經濟","hint3":"音樂","correctHintIndex":2},{"id":267,"word":"斯芬克斯之謎","answer":"斯芬克斯之謎是希臘神話中怪物向旅人提出的謎題：早上四腳、中午兩腳、晚上三腳的是甚麼？答案是人的一生。","hint1":"數學","hint2":"建築","hint3":"神話","correctHintIndex":3},{"id":268,"word":"灼口症","answer":"灼口症是口腔黏膜外觀看似正常，患者卻長期感到舌頭、嘴唇或口腔灼痛的情況，可能與神經、荷爾蒙或心理因素有關。","hint1":"醫學","hint2":"美食","hint3":"消防","correctHintIndex":1},{"id":269,"word":"群體感應","answer":"群體感應是細菌利用化學訊號估算附近同類數量的機制。當濃度達到門檻，細菌會一起改變基因表現，例如形成生物膜。","hint1":"心理學","hint2":"生物","hint3":"軍事","correctHintIndex":2},{"id":270,"word":"薛丁格的貓","answer":"薛丁格的貓是量子力學思想實驗，把貓的生死與微觀隨機事件連結。在打開箱子觀察前，數學描述可視為生與死狀態疊加。","hint1":"動物","hint2":"文學","hint3":"物理","correctHintIndex":3},{"id":271,"word":"口紅效應","answer":"口紅效應是假說，指經濟不景氣時，消費者可能減少大型奢侈消費，轉而購買價格較低、仍能帶來滿足感的小奢侈品。","hint1":"經濟","hint2":"美容","hint3":"電影","correctHintIndex":1},{"id":272,"word":"死亡之舞","answer":"死亡之舞是中世紀歐洲常見的藝術主題，描繪死神帶領國王、教士、商人和農民同行，藉此表示死亡不會因身分高低而有所分別。","hint1":"法律","hint2":"藝術","hint3":"醫學","correctHintIndex":2},{"id":273,"word":"睡美人症候群","answer":"睡美人症候群正式名稱為克萊恩－萊文症候群，患者會反覆進入長時間嗜睡期，每天可能睡近二十小時，期間伴隨認知和行為改變。","hint1":"文學","hint2":"美容","hint3":"醫學","correctHintIndex":3},{"id":274,"word":"趨化性","answer":"趨化性是細胞或微生物因化學物質濃度差而定向移動的能力。白血球會沿感染訊號前進，細菌也可移向養分或遠離毒物。","hint1":"生物","hint2":"美容","hint3":"政治","correctHintIndex":1},{"id":275,"word":"燈塔船","answer":"燈塔船是一艘長期停泊在危險水域的船，配備強光、霧號和導航設備。在無法興建固定燈塔的地方，它會充當海上航標。","hint1":"宗教","hint2":"交通","hint3":"軍事","correctHintIndex":2},{"id":276,"word":"摩擦起電序","answer":"摩擦起電序把不同材料按失去或獲得電子的傾向排列。兩種材料接觸再分離後，位置相距愈遠通常愈容易帶相反電荷。","hint1":"教育","hint2":"法律","hint3":"物理","correctHintIndex":3},{"id":277,"word":"恩格爾定律","answer":"恩格爾定律指出，家庭收入增加時，食物支出金額可能上升，但食物佔總支出的比例通常下降，因此可用來觀察生活水平。","hint1":"經濟","hint2":"物理","hint3":"天文","correctHintIndex":1},{"id":278,"word":"法尤姆肖像","answer":"法尤姆肖像是羅馬統治埃及時期固定在木乃伊面部的寫實人物畫，多繪於木板，呈現死者生前面貌、服飾和當時跨文化風格。","hint1":"醫學","hint2":"藝術","hint3":"歷史","correctHintIndex":2},{"id":279,"word":"卡普格拉妄想","answer":"卡普格拉妄想是一種妄想症狀，患者相信親人或熟悉人物已被外貌相同的冒牌者取代。即使能認出對方面孔，仍否認其真實身分。","hint1":"軍事","hint2":"魔術","hint3":"醫學","correctHintIndex":3},{"id":280,"word":"殭屍蟻菌","answer":"殭屍蟻菌是一類寄生螞蟻的真菌。它會影響宿主行為，使螞蟻爬到適合繁殖的位置咬住植物，之後真菌從屍體長出並散播孢子。","hint1":"生物","hint2":"電影","hint3":"美食","correctHintIndex":1},{"id":281,"word":"酥油","answer":"酥油是把普通牛油加熱，除去水分和乳固體後留下的乳脂。它煙點較高、保存時間較長，在印度及南亞料理中十分常見。","hint1":"宗教","hint2":"美食","hint3":"自然","correctHintIndex":2},{"id":282,"word":"布朗運動","answer":"布朗運動是懸浮微粒在液體或氣體中不規則抖動的現象，原因是周圍分子從不同方向持續碰撞，提供分子存在的證據。","hint1":"舞蹈","hint2":"政治","hint3":"物理","correctHintIndex":3},{"id":283,"word":"檸檬市場","answer":"檸檬市場描述賣方比買方更了解商品品質時，劣質品會壓低整體價格，令優質賣家退出，最終市場只剩更多低品質商品。","hint1":"經濟","hint2":"美食","hint3":"交通","correctHintIndex":1},{"id":284,"word":"錯視藝術","answer":"錯視藝術利用幾何圖案、強烈對比和重複線條，令靜止畫面看似震動、旋轉或凹凸。觀眾的視覺系統會主動補足運動感。","hint1":"醫學","hint2":"藝術","hint3":"天文","correctHintIndex":2},{"id":285,"word":"鏡觸覺","answer":"鏡觸覺是看見別人被觸碰時，自己身上相應位置也產生觸感的聯覺現象，反映大腦對他人身體狀態的模擬反應特別強烈。","hint1":"魔術","hint2":"攝影","hint3":"醫學","correctHintIndex":3},{"id":286,"word":"葉綠體竊取","answer":"葉綠體竊取是某些海蛞蝓或單細胞生物，吃下藻類後保留其葉綠體的現象。這些葉綠體可在宿主體內暫時繼續進行光合作用。","hint1":"生物","hint2":"法律","hint3":"體育","correctHintIndex":1},{"id":287,"word":"梅納反應","answer":"梅納反應是胺基酸與還原糖在加熱時產生的褐變反應，會形成烤肉、麵包和咖啡的香氣與顏色，與單純加熱糖的焦糖化不同。","hint1":"法律","hint2":"美食","hint3":"音樂","correctHintIndex":2},{"id":288,"word":"量子鎖定","answer":"量子鎖定是超導體內磁通被固定在缺陷位置的現象，使超導體能在磁軌上穩定懸浮，甚至倒掛，前提是材料保持極低溫。","hint1":"法律","hint2":"魔術","hint3":"物理","correctHintIndex":3},{"id":289,"word":"公地悲劇","answer":"公地悲劇指多人自由使用共享資源時，每人都傾向多取一點利益，長期卻令資源過度消耗，最終所有使用者一同受損。","hint1":"經濟","hint2":"農業","hint3":"戲劇","correctHintIndex":1},{"id":290,"word":"精緻屍體","answer":"精緻屍體是超現實主義者合作創作的遊戲。每人只看見前一部分，依次畫或寫下內容，最後展開成意外而荒誕的完整作品。","hint1":"醫學","hint2":"藝術","hint3":"美食","correctHintIndex":2},{"id":291,"word":"異食癖","answer":"異食癖是持續食用泥土、紙張、冰塊等非營養物質的行為。它可能與缺鐵、懷孕、發展障礙或心理因素有關。","hint1":"美食","hint2":"宗教","hint3":"醫學","correctHintIndex":3},{"id":292,"word":"睡眠者效應","answer":"睡眠者效應指不可信來源的訊息最初說服力較低，但時間過去後，人們可能忘記來源，只記得內容，令訊息影響反而增加。","hint1":"心理學","hint2":"醫學","hint3":"文學","correctHintIndex":1},{"id":293,"word":"球化術","answer":"球化術是分子料理常見技巧，利用海藻酸鹽與鈣離子反應，在液體表面形成薄膜，製成外層有膜、內部仍流動的小球。","hint1":"建築","hint2":"美食","hint3":"歷史","correctHintIndex":2},{"id":294,"word":"聲致發光","answer":"聲致發光是液體中的微小氣泡受強烈聲波驅動，快速膨脹和塌縮時發出短暫閃光的現象，氣泡內部溫度可瞬間升高。","hint1":"音樂","hint2":"生物","hint3":"物理","correctHintIndex":3},{"id":295,"word":"英式拍賣","answer":"英式拍賣由較低價格開始，買家公開競相加價，直到沒有人願意再出更高價，最後由最高出價者取得拍賣品。","hint1":"經濟","hint2":"語言","hint3":"體育","correctHintIndex":1},{"id":296,"word":"現成品藝術","answer":"現成品藝術是藝術家選取普通日用品，幾乎不作加工便以藝術品名義展示。作品重點不在手工技巧，而在選擇、脈絡和觀念。","hint1":"工程","hint2":"藝術","hint3":"法律","correctHintIndex":2},{"id":297,"word":"白大衣效應","answer":"白大衣效應是部分人在診所或醫護人員面前因緊張而血壓上升的現象，因此診室測量值可能高於家中或日常環境的水平。","hint1":"服裝","hint2":"管理","hint3":"醫學","correctHintIndex":3},{"id":298,"word":"島嶼法則","answer":"島嶼法則指出，島上的小型動物可能演化得更大，而大型動物可能變小。資源、捕食壓力和競爭差異，都會影響這種體形變化。","hint1":"生物","hint2":"法律","hint3":"醫學","correctHintIndex":1},{"id":299,"word":"黃金時刻","answer":"黃金時刻是日出後或日落前的一段時間，陽光角度較低，色調溫暖且陰影柔和。攝影師常利用它拍攝人物、建築和風景。","hint1":"金融","hint2":"攝影","hint3":"歷史","correctHintIndex":2},{"id":300,"word":"康達效應","answer":"康達效應是流體射流傾向貼著鄰近曲面流動，而不是直線離開。它會影響飛機升力裝置、風扇和無葉送風設備。","hint1":"心理學","hint2":"舞蹈","hint3":"物理","correctHintIndex":3},{"id":301,"word":"資源詛咒","answer":"資源詛咒是部分資源豐富國家反而出現腐敗、衝突和經濟失衡的現象。問題並非資源本身，而與制度、分配和產業依賴有關。","hint1":"經濟","hint2":"神話","hint3":"宗教","correctHintIndex":1},{"id":302,"word":"綠人雕像","answer":"綠人雕像是歐洲教堂和建築常見的人臉葉飾，口鼻周圍長出藤蔓或葉片。其確切含義不明，常被解讀為自然和重生象徵。","hint1":"植物","hint2":"藝術","hint3":"戶外","correctHintIndex":2},{"id":303,"word":"地圖舌","answer":"地圖舌是舌面乳頭暫時消失，形成不規則紅色斑塊和白色邊緣的良性情況。斑塊位置會移動，看起來像不斷改變的地圖。","hint1":"地理","hint2":"美食","hint3":"醫學","correctHintIndex":3},{"id":304,"word":"雌先熟","answer":"雌先熟是順序雌雄同體的一種，個體先以雌性繁殖；當群體中的大型雄性消失後，部分雌性便會轉變成雄性。","hint1":"生物","hint2":"服裝","hint3":"法律","correctHintIndex":1},{"id":305,"word":"巴斯德效應","answer":"巴斯德效應是氧氣充足時，酵母發酵速度下降的現象。細胞改用效率更高的有氧呼吸後，消耗的糖減少，產生的酒精亦較少。","hint1":"醫學","hint2":"美食","hint3":"天文","correctHintIndex":2},{"id":306,"word":"萊頓弗羅斯特效應","answer":"萊頓弗羅斯特效應是液滴落在遠高於沸點的表面時，底部迅速形成蒸氣層。蒸氣把液滴托起，使它不會立即蒸發，反而四處滑動。","hint1":"醫學","hint2":"戲劇","hint3":"物理","correctHintIndex":3},{"id":307,"word":"暗池","answer":"暗池是未公開顯示買賣盤的私人證券交易場所，主要供大型投資者交易大量股票，以減少市場提前得知訂單而造成的價格波動。","hint1":"經濟","hint2":"地理","hint3":"工程","correctHintIndex":1},{"id":308,"word":"行動繪畫","answer":"行動繪畫強調創作過程中的身體動作，畫家會把顏料滴、潑或甩到畫布上。傑克遜・波洛的大型作品令此風格廣為人知。","hint1":"體育","hint2":"藝術","hint3":"自然","correctHintIndex":2},{"id":309,"word":"聯覺","answer":"聯覺是某一種感官刺激，自動引發另一種感官經驗的現象。例如有人看見字母便感到特定顏色，或聽見聲音便聯想到形狀。","hint1":"體育","hint2":"宗教","hint3":"醫學","correctHintIndex":3},{"id":310,"word":"孤雌生殖","answer":"孤雌生殖是雌性卵細胞在沒有受精的情況下發育成新個體。它可見於昆蟲、爬蟲類和部分魚類，後代遺傳多樣性較低。","hint1":"生物","hint2":"宗教","hint3":"文學","correctHintIndex":1},{"id":311,"word":"低溫慢煮","answer":"低溫慢煮把食材密封後，長時間放在精準控制溫度的水中加熱。食物能均勻達到目標熟度，並減少外熟內生與水分流失。","hint1":"醫學","hint2":"美食","hint3":"工程","correctHintIndex":2},{"id":312,"word":"伯努利原理","answer":"伯努利原理指出，理想流體沿同一流線運動時，速度較高的位置靜壓通常較低。它可解釋噴霧器和文丘里管運作。","hint1":"經濟","hint2":"醫學","hint3":"物理","correctHintIndex":3},{"id":313,"word":"鬍鬚稅","answer":"鬍鬚稅是俄羅斯彼得大帝推動西化時徵收的費用。希望保留鬍鬚的男子需繳稅並攜帶證明，藉此改變傳統外貌習慣。","hint1":"經濟","hint2":"美容","hint3":"宗教","correctHintIndex":1},{"id":314,"word":"透視縮短","answer":"透視縮短是把朝向觀眾延伸的物體畫得較短，使平面圖像產生深度。人物的手腳若指向畫面外，比例會被刻意壓縮。","hint1":"醫學","hint2":"藝術","hint3":"工程","correctHintIndex":2},{"id":315,"word":"曙光現象","answer":"曙光現象是清晨時血糖在未進食下自然升高的情況。身體在醒來前釋放荷爾蒙，促使肝臟製造葡萄糖，糖尿病患者尤其明顯。","hint1":"攝影","hint2":"自然","hint3":"醫學","correctHintIndex":3},{"id":316,"word":"生物發光","answer":"生物發光是生物透過化學反應自行產生可見光的現象。螢火蟲、深海魚和部分浮游生物會用它求偶、誘捕獵物或防禦。","hint1":"生物","hint2":"攝影","hint3":"工程","correctHintIndex":1},{"id":317,"word":"旨味","answer":"旨味又稱鮮味，是由麩胺酸和部分核苷酸引起的基本味覺，常見於海帶、肉湯、番茄及熟成芝士，能令味道更濃厚持久。","hint1":"音樂","hint2":"美食","hint3":"建築","correctHintIndex":2},{"id":318,"word":"馬蘭戈尼效應","answer":"馬蘭戈尼效應是液體表面張力不均所引起的流動。溫度或濃度差異會令液體由低表面張力區流向高表面張力區，例如酒淚現象。","hint1":"戲劇","hint2":"動物","hint3":"物理","correctHintIndex":3},{"id":319,"word":"鹽稅","answer":"鹽稅是政府對食鹽生產、運輸或購買徵收的稅項。由於鹽是生活必需品，過高鹽稅曾引發走私、民怨和政治衝突。","hint1":"經濟","hint2":"美食","hint3":"醫學","correctHintIndex":1},{"id":320,"word":"潘洛斯階梯","answer":"潘洛斯階梯是一種不可能物體，樓梯看似一直向上或向下，最後卻回到起點。它只能在二維圖像的特定透視中成立。","hint1":"建築","hint2":"藝術","hint3":"體育","correctHintIndex":2},{"id":321,"word":"黑毛舌","answer":"黑毛舌是舌背絲狀乳頭過度伸長，並被細菌、食物或煙草染色的情況。舌面看似長毛，通常可透過清潔和改善習慣處理。","hint1":"服裝","hint2":"植物","hint3":"醫學","correctHintIndex":3},{"id":322,"word":"貝氏擬態","answer":"貝氏擬態是無毒或無害物種模仿有毒、難吃物種的外觀，藉此欺騙捕食者。模仿者本身沒有真正防禦能力，卻共享警戒效果。","hint1":"生物","hint2":"經濟","hint3":"戲劇","correctHintIndex":1},{"id":323,"word":"鹽麴","answer":"鹽麴是以米麴、鹽和水熟成的日式調味料。麴菌酵素能分解蛋白質和澱粉，使肉類更柔軟，並增添甜味與鮮味。","hint1":"建築","hint2":"美食","hint3":"音樂","correctHintIndex":2},{"id":324,"word":"布魯斯特角","answer":"布魯斯特角是光線照到兩種介質交界時，使反射光完全呈線性偏振的特定入射角。偏光太陽眼鏡和光學儀器會利用相關原理。","hint1":"飲品","hint2":"戲劇","hint3":"物理","correctHintIndex":3},{"id":325,"word":"邊際效用遞減","answer":"邊際效用遞減是連續消費同一物品時，每增加一單位所帶來的額外滿足通常逐漸下降。第一杯水對口渴者往往最有價值。","hint1":"經濟","hint2":"醫學","hint3":"農業","correctHintIndex":1},{"id":326,"word":"濕壁畫","answer":"濕壁畫是在仍潮濕的石灰灰泥上作畫，顏料隨牆面乾燥而固定於其中。畫家必須在灰泥未乾前完成當日區域。","hint1":"建築","hint2":"藝術","hint3":"自然","correctHintIndex":2},{"id":327,"word":"睡眠紡錘","answer":"睡眠紡錘是非快速眼動睡眠期間出現的短暫腦電波活動，波形像兩端收窄的紡錘。它常見於第二階段睡眠，與記憶整理有關。","hint1":"工藝","hint2":"天文","hint3":"醫學","correctHintIndex":3},{"id":328,"word":"拉撒路分類群","answer":"拉撒路分類群是曾在化石紀錄中消失很長時間，後來又重新出現的生物分類群。牠們不一定真正滅絕，可能只是期間沒有留下化石。","hint1":"生物","hint2":"宗教","hint3":"科技","correctHintIndex":1},{"id":329,"word":"巴甫洛娃","answer":"巴甫洛娃是一種外殼酥脆、內部柔軟的蛋白霜甜品，通常配鮮奶油和水果。名稱取自俄羅斯芭蕾舞者安娜・巴甫洛娃。","hint1":"舞蹈","hint2":"美食","hint3":"歷史","correctHintIndex":2},{"id":330,"word":"法拉第籠","answer":"法拉第籠是由導電材料包圍的空間，外來電荷會分布在表面，使內部電場大幅減弱。汽車金屬外殼可提供類似雷擊保護。","hint1":"動物","hint2":"體育","hint3":"物理","correctHintIndex":3},{"id":331,"word":"次優理論","answer":"次優理論指出，若一個最佳條件無法達成，強行滿足其他所有最佳條件，未必得到次佳結果，有時反而需要同時偏離多個條件。","hint1":"經濟","hint2":"體育","hint3":"出版","correctHintIndex":1},{"id":332,"word":"貧窮藝術","answer":"貧窮藝術是二十世紀六十年代意大利興起的藝術運動，常使用泥土、木材、布料和廢物等日常材料，反對商業化和傳統藝術權威。","hint1":"經濟","hint2":"藝術","hint3":"數學","correctHintIndex":2},{"id":333,"word":"水中毒","answer":"水中毒是短時間喝下過量清水，使血液中的鈉被嚴重稀釋。腦細胞可能因吸水腫脹，引發頭痛、抽搐，嚴重時甚至死亡。","hint1":"飲品","hint2":"化學","hint3":"醫學","correctHintIndex":3},{"id":334,"word":"一次繁殖","answer":"一次繁殖是生物一生只進行一次大型繁殖，之後通常死亡的策略。太平洋鮭魚和部分章魚會把大量能量集中在最後一批後代。","hint1":"生物","hint2":"宗教","hint3":"軍事","correctHintIndex":1},{"id":335,"word":"納豆菌","answer":"納豆菌是製作納豆使用的枯草桿菌變種。它在溫暖環境中發酵熟黃豆，產生黏性拉絲、特殊氣味及分解蛋白質的酵素。","hint1":"醫學","hint2":"美食","hint3":"農業","correctHintIndex":2},{"id":336,"word":"真空衰變","answer":"真空衰變是假想宇宙目前處於不穩定的假真空，若某處轉為更低能量狀態，變化可能形成氣泡並以接近光速向外擴散。","hint1":"家居","hint2":"經濟","hint3":"物理","correctHintIndex":3},{"id":337,"word":"科斯定理","answer":"科斯定理指出，在產權清楚且交易成本極低時，受外部影響的各方可透過協商達成有效率結果，不論最初權利如何分配。","hint1":"經濟","hint2":"醫學","hint3":"建築","correctHintIndex":1},{"id":338,"word":"變形畫","answer":"變形畫是把圖像刻意拉長或扭曲，只有從特定角度或透過曲面鏡觀看，才會恢復正常形狀的視覺藝術技巧。","hint1":"醫學","hint2":"藝術","hint3":"地理","correctHintIndex":2},{"id":339,"word":"盲視","answer":"盲視是部分視覺皮層受損者雖然自稱看不見，仍能猜中物件位置或移動方向的現象，顯示視覺資訊可以在無意識下被處理。","hint1":"攝影","hint2":"語言","hint3":"醫學","correctHintIndex":3},{"id":340,"word":"耐久卵","answer":"耐久卵是能在乾旱、低溫或缺氧環境中停止發育的卵。環境再次適合時才孵化，使小型水生生物能熬過池塘乾涸等逆境。","hint1":"生物","hint2":"珠寶","hint3":"醫學","correctHintIndex":1},{"id":341,"word":"死信箱","answer":"死信箱是間諜或秘密聯絡者在不直接見面的情況下，預先約定放置情報或物品的隱蔽地點，例如牆縫、長椅底或空置容器。","hint1":"郵政","hint2":"間諜","hint3":"科技","correctHintIndex":2},{"id":342,"word":"楞次定律","answer":"楞次定律指出，感應電流產生的磁場會反抗原本磁通量的改變。這個方向確保電磁感應不會憑空產生能量。","hint1":"法律","hint2":"音樂","hint3":"物理","correctHintIndex":3},{"id":343,"word":"荷蘭病","answer":"荷蘭病指天然資源出口帶來大量外匯，令本國貨幣升值，其他製造業出口失去競爭力，經濟因而過度依賴單一資源產業。","hint1":"經濟","hint2":"醫學","hint3":"工程","correctHintIndex":1},{"id":344,"word":"牛津逗號","answer":"牛津逗號是英文列舉三項或以上內容時，放在最後一個連接詞之前的逗號。它可減少句意含糊，但不同出版風格對使用方式有差異。","hint1":"禮儀","hint2":"語言","hint3":"數學","correctHintIndex":2},{"id":345,"word":"物體失認","answer":"物體失認是視力基本正常，卻無法僅靠視覺認出物件的神經障礙。患者看見形狀與顏色，仍需靠觸摸或聲音確認物品。","hint1":"藝術","hint2":"法律","hint3":"醫學","correctHintIndex":3},{"id":346,"word":"黑冰","answer":"黑冰是透明而難以察覺的薄冰，常形成在道路或橋面。由於冰層下的深色路面仍可被看見，駕駛者容易誤以為只是濕地。","hint1":"自然","hint2":"美食","hint3":"攝影","correctHintIndex":1},{"id":347,"word":"乳清","answer":"乳清是牛奶凝結製作芝士時分離出的淡黃色液體，含水分、乳糖和蛋白質。乳清蛋白可再加工成飲品及營養補充原料。","hint1":"醫學","hint2":"美食","hint3":"舞蹈","correctHintIndex":2},{"id":348,"word":"卡西米爾效應","answer":"卡西米爾效應是兩塊非常接近的未帶電導體，在真空中受到量子場影響而產生吸引力的現象。距離愈小，作用通常愈明顯。","hint1":"美食","hint2":"宗教","hint3":"物理","correctHintIndex":3},{"id":349,"word":"吉芬商品","answer":"吉芬商品是價格上升時需求反而增加的特殊劣等商品。原因是收入效果大於替代效果，消費者更無力購買較昂貴的替代品。","hint1":"經濟","hint2":"服裝","hint3":"工藝","correctHintIndex":1},{"id":350,"word":"花園路徑句","answer":"花園路徑句會引導讀者先作出錯誤語法分析，讀到後段才發現必須重新理解。它用來研究人類如何即時處理句子結構。","hint1":"植物","hint2":"語言","hint3":"建築","correctHintIndex":2},{"id":351,"word":"科塔爾妄想","answer":"科塔爾妄想患者可能堅信自己已經死亡、身體器官不存在，或整個世界已消失。它是罕見而嚴重的虛無妄想症狀。","hint1":"宗教","hint2":"地理","hint3":"醫學","correctHintIndex":3},{"id":352,"word":"魚雨","answer":"魚雨是魚、青蛙等小動物隨暴風從天空落下的現象。一般認為水龍捲或強烈上升氣流把動物捲起，移動一段距離後再降落。","hint1":"自然","hint2":"宗教","hint3":"美食","correctHintIndex":1},{"id":353,"word":"天使分享","answer":"天使分享指酒液在木桶熟成期間，部分水分和酒精穿過木材蒸發而造成的自然損耗。威士忌、干邑和部分葡萄酒都會出現。","hint1":"宗教","hint2":"飲品","hint3":"金融","correctHintIndex":2},{"id":354,"word":"咖啡環效應","answer":"咖啡環效應是液滴乾燥後，微粒集中在邊緣形成深色圓環的現象。原因是液體向外流動，將咖啡、顏料等微粒帶到外圍。","hint1":"心理學","hint2":"美食","hint3":"物理","correctHintIndex":3},{"id":355,"word":"荷蘭式拍賣","answer":"荷蘭式拍賣由高價開始，價格不斷下降，第一位接受目前價格的買家便成交。花卉市場和部分金融產品曾採用這種方式。","hint1":"經濟","hint2":"植物","hint3":"交通","correctHintIndex":1},{"id":356,"word":"語義飽和","answer":"語義飽和是同一個詞快速重複多次後，暫時變得陌生或失去意義的現象。大腦的語義反應短暫疲勞，但通常很快恢復。","hint1":"美食","hint2":"語言","hint3":"醫學","correctHintIndex":2},{"id":357,"word":"純失寫","answer":"純失寫是腦部受損後，書寫能力明顯喪失但閱讀和口語相對保留的狀態。患者手部力量正常，仍難以正確組字或拼寫。","hint1":"藝術","hint2":"科技","hint3":"醫學","correctHintIndex":3},{"id":358,"word":"綠閃光","answer":"綠閃光是日出前或日落後，太陽邊緣短暫出現綠色亮光的現象。它由大氣折射和色散造成，通常只維持一至數秒。","hint1":"自然","hint2":"科技","hint3":"美食","correctHintIndex":1},{"id":359,"word":"鹽焗","answer":"鹽焗是用大量粗鹽包圍食材再加熱的烹調方法。鹽層能均勻傳熱並鎖住水分與香氣，但食材未必因此吸收大量鹽分。","hint1":"建築","hint2":"美食","hint3":"宗教","correctHintIndex":2},{"id":360,"word":"佩爾帖效應","answer":"佩爾帖效應是電流通過兩種不同導體或半導體的接點時，一端吸熱而另一端放熱的現象。熱電冷卻器便是利用這個原理製冷。","hint1":"動物","hint2":"舞蹈","hint3":"物理","correctHintIndex":3},{"id":361,"word":"棘輪效應","answer":"消費中的棘輪效應是收入上升時生活開支容易增加，但收入下降後消費不會同幅度減少，因為人們已習慣較高生活水平。","hint1":"經濟","hint2":"工程","hint3":"醫學","correctHintIndex":1},{"id":362,"word":"首語重複","answer":"首語重複是在連續句子或分句開頭，反覆使用相同詞語的修辭手法。它能加強節奏和重點，常見於演說、詩歌及政治口號。","hint1":"法律","hint2":"語言","hint3":"禮儀","correctHintIndex":2},{"id":363,"word":"先天性無痛症","answer":"先天性無痛症是患者自出生起難以感受身體疼痛的罕見疾病。缺少警告訊號會令骨折、燙傷和感染不易被發現，反而十分危險。","hint1":"科技","hint2":"經濟","hint3":"醫學","correctHintIndex":3},{"id":364,"word":"月虹","answer":"月虹是月光經空氣中的水滴折射和反射形成的彩虹。由於月光較弱，肉眼常只見淡白色，但長時間曝光照片可拍出顏色。","hint1":"自然","hint2":"神話","hint3":"音樂","correctHintIndex":1},{"id":365,"word":"轉化糖","answer":"轉化糖是蔗糖被分解成葡萄糖和果糖後形成的混合物，比普通蔗糖更甜且不易結晶，常用於糖果、糖漿、雪糕及烘焙產品。","hint1":"經濟","hint2":"美食","hint3":"生物","correctHintIndex":2},{"id":366,"word":"雙生子佯謬","answer":"雙生子佯謬是相對論中的思想實驗。一名雙胞胎高速太空旅行後返回，經歷的時間較少，因此會比一直留在地球的另一人年輕。","hint1":"醫學","hint2":"文學","hint3":"物理","correctHintIndex":3},{"id":367,"word":"火爐稅","answer":"火爐稅是按住宅內壁爐或爐灶數量徵收的稅。稅吏需進屋點算，引起侵犯私隱的不滿，也有人封住爐口逃避徵稅。","hint1":"經濟","hint2":"消防","hint3":"美食","correctHintIndex":1},{"id":368,"word":"聯綿詞","answer":"聯綿詞是兩個音節結合後共同表達一個意思的詞，部分具有雙聲或疊韻關係，例如「玲瓏」和「逍遙」，拆開後未必保留原義。","hint1":"建築","hint2":"語言","hint3":"消防","correctHintIndex":2},{"id":369,"word":"疣狀表皮發育不良症","answer":"疣狀表皮發育不良症是一種罕見遺傳疾病，患者對部分人類乳突病毒異常易感，皮膚會長出大量粗糙、樹皮狀的角質增生。","hint1":"植物","hint2":"神話","hint3":"醫學","correctHintIndex":3},{"id":370,"word":"乳狀雲","answer":"乳狀雲是雲底出現一袋袋下垂突起的雲形，常見於強烈雷暴附近。它看起來十分壯觀，但本身並不等於龍捲風即將形成。","hint1":"自然","hint2":"醫學","hint3":"服裝","correctHintIndex":1},{"id":371,"word":"巧克力起霜","answer":"巧克力起霜是表面出現灰白斑紋的現象。脂肪起霜來自可可脂晶體變化，糖起霜則因水分溶解糖後重新結晶，通常仍可食用。","hint1":"自然","hint2":"美食","hint3":"植物","correctHintIndex":2},{"id":372,"word":"非牛頓流體","answer":"非牛頓流體的黏度不固定，會隨受力方式或時間改變。玉米粉水受快速撞擊時變硬，慢慢施力時卻仍像液體流動。","hint1":"經濟","hint2":"天文","hint3":"物理","correctHintIndex":3},{"id":373,"word":"維克里拍賣","answer":"維克里拍賣是密封出價的第二價格拍賣。最高出價者得標，但只需支付第二高的價格，理論上鼓勵參與者報出真實估值。","hint1":"經濟","hint2":"服裝","hint3":"醫學","correctHintIndex":1},{"id":374,"word":"迴環句","answer":"迴環句把兩組詞語或概念以相反次序重新排列，形成甲乙、乙甲的結構。它利用對稱和反轉，使句意更鮮明或帶有諷刺。","hint1":"數學","hint2":"語言","hint3":"交通","correctHintIndex":2},{"id":375,"word":"弗雷氏症候群","answer":"弗雷氏症候群是進食或想到食物時，耳前、臉頰或太陽穴出汗和潮紅的情況，常在腮腺手術後因神經錯誤再生而出現。","hint1":"服裝","hint2":"飲品","hint3":"醫學","correctHintIndex":3},{"id":376,"word":"幡狀雲","answer":"幡狀雲是雲底降水尚未到達地面便在乾燥空氣中蒸發的現象。遠看像從雲層垂下的絲帶，也稱為雨幡或降水尾跡。","hint1":"自然","hint2":"音樂","hint3":"宗教","correctHintIndex":1},{"id":377,"word":"層壓法","answer":"層壓法是把牛油包入麵團後反覆摺疊和擀壓，形成交替薄層。烘烤時水分變成蒸氣，推開各層並製造酥脆口感。","hint1":"經濟","hint2":"美食","hint3":"建築","correctHintIndex":2},{"id":378,"word":"馬克斯威妖","answer":"馬克斯威妖是熱力學思想實驗中的假想小妖。它能辨認分子速度並控制小門，嘗試在不消耗能量下製造溫差，挑戰第二定律。","hint1":"文學","hint2":"遊戲","hint3":"物理","correctHintIndex":3},{"id":379,"word":"韋伯倫商品","answer":"韋伯倫商品是價格愈高，部分消費者反而愈想購買的商品。高價本身能顯示財富和地位，常見於奢侈品和限量產品。","hint1":"經濟","hint2":"服裝","hint3":"醫學","correctHintIndex":1},{"id":380,"word":"假朋友","answer":"假朋友是兩種語言中外形或發音相似，意思卻不同的詞語。例如英文和其他語言的近似詞，可能令人作出完全錯誤的翻譯。","hint1":"軍事","hint2":"語言","hint3":"心理學","correctHintIndex":2},{"id":381,"word":"全身性多毛症","answer":"全身性多毛症會令患者面部和身體長出異常濃密毛髮，民間常稱狼人症。它可能由遺傳、藥物或其他疾病所引起。","hint1":"民間傳說","hint2":"動物","hint3":"醫學","correctHintIndex":3},{"id":382,"word":"山谷風","answer":"山谷風是白天地面受熱後，谷底暖空氣沿山坡向上流動的局地風。夜間山坡冷卻，風向通常會反轉成由高處吹向谷底的山風。","hint1":"自然","hint2":"法律","hint3":"音樂","correctHintIndex":1},{"id":383,"word":"鹼水","answer":"鹼水是含鹼性鹽類的食用溶液，加入麵團後可令麵條呈淡黃色、口感更彈牙並帶特殊香氣，雲吞麵和拉麵常會使用。","hint1":"醫學","hint2":"美食","hint3":"物理","correctHintIndex":2},{"id":384,"word":"多普勒效應","answer":"多普勒效應是波源與觀察者相對移動時，接收到的頻率產生變化。救護車接近時聲調較高，離開後則突然降低。","hint1":"音樂","hint2":"法律","hint3":"物理","correctHintIndex":3},{"id":385,"word":"毒丸計劃","answer":"毒丸計劃是公司抵抗敵意收購的策略，讓現有股東在特定情況下以優惠價增持股份，稀釋收購者持股並提高收購成本。","hint1":"經濟","hint2":"醫學","hint3":"電影","correctHintIndex":1},{"id":386,"word":"空耳","answer":"空耳是把外語、歌詞或模糊語音，誤聽成自己熟悉語言的詞句。誤聽內容通常意思不同，卻因發音相近而令人覺得合理。","hint1":"醫學","hint2":"語言","hint3":"美食","correctHintIndex":2},{"id":387,"word":"異手症","answer":"異手症患者的一隻手會做出看似自主、違反本人意願的動作，例如解開另一隻手扣上的鈕扣，但患者並非故意控制它。","hint1":"魔術","hint2":"工程","hint3":"醫學","correctHintIndex":3},{"id":388,"word":"雷雪","answer":"雷雪是伴隨雷聲和閃電的降雪天氣。它需要強烈上升氣流和大氣不穩定，發生時往往代表局部降雪強度很高。","hint1":"自然","hint2":"軍事","hint3":"體育","correctHintIndex":1},{"id":389,"word":"真空浸漬","answer":"真空浸漬先降低壓力，抽走食材孔隙中的空氣；恢復常壓時，液體被推入內部，可加快入味，也能改變水果和蔬菜質地。","hint1":"天文","hint2":"美食","hint3":"醫學","correctHintIndex":2},{"id":390,"word":"壓電效應","answer":"壓電效應是某些晶體受壓時產生電壓，或通電後發生微小形變的現象。打火機點火器、超聲波探頭都會利用它。","hint1":"醫學","hint2":"美食","hint3":"物理","correctHintIndex":3},{"id":391,"word":"搭便車問題","answer":"搭便車問題是有人享用公共資源或集體成果，卻不願分擔成本。若太多人選擇不付出，公共服務便可能不足甚至無法維持。","hint1":"經濟","hint2":"交通","hint3":"戲劇","correctHintIndex":1},{"id":392,"word":"鬼詞","answer":"鬼詞是原本不存在，卻因抄寫、排印、誤讀或字典編輯錯誤而產生的詞語。有些鬼詞被後來的字典沿用，甚至流傳多年。","hint1":"醫學","hint2":"語言","hint3":"旅遊","correctHintIndex":2},{"id":393,"word":"巴林特症候群","answer":"巴林特症候群是雙側腦部受損引起的罕見障礙，患者難以同時看見多個物件、準確伸手取物，眼睛亦難按意願轉向目標。","hint1":"經濟","hint2":"建築","hint3":"醫學","correctHintIndex":3},{"id":394,"word":"哈布沙暴","answer":"哈布沙暴是一堵由雷暴下沉氣流推動的巨大沙塵牆。它能迅速橫掃乾旱地區，令能見度在短時間內大幅下降。","hint1":"自然","hint2":"服裝","hint3":"歷史","correctHintIndex":1},{"id":395,"word":"巧克力調溫","answer":"巧克力調溫是反覆加熱、降溫再升溫，以控制可可脂形成穩定晶體的技術。完成後表面有光澤、折斷清脆且不易融化。","hint1":"醫學","hint2":"美食","hint3":"自然","correctHintIndex":2},{"id":396,"word":"塞曼效應","answer":"塞曼效應是原子或分子置於磁場後，原本單一光譜線分裂成多條線的現象。科學家可利用分裂程度分析磁場和原子結構。","hint1":"音樂","hint2":"醫學","hint3":"物理","correctHintIndex":3},{"id":397,"word":"不可能三角","answer":"不可能三角指出，一個經濟體無法同時擁有固定匯率、資本自由流動和獨立貨幣政策，三者之中最多只能完整選擇兩項。","hint1":"經濟","hint2":"數學","hint3":"禮儀","correctHintIndex":1},{"id":398,"word":"薩托方陣","answer":"薩托方陣是由五個拉丁詞組成的回文正方形。文字橫讀、直讀和反向閱讀都可形成相同序列，古代遺址中曾發現多個版本。","hint1":"軍事","hint2":"語言","hint3":"農業","correctHintIndex":2},{"id":399,"word":"計算失認","answer":"計算失認是腦部受損後，無法理解數字關係或完成原本會做的運算。患者可能認得數字符號，卻難以比較大小或處理金錢。","hint1":"經濟","hint2":"教育","hint3":"醫學","correctHintIndex":3},{"id":400,"word":"上升閃電","answer":"上升閃電是電流從高塔、風力發電機或山頂建築向雲層發展的閃電。它可被附近雷暴觸發，也可能在特定電場下自行開始。","hint1":"自然","hint2":"建築","hint3":"法律","correctHintIndex":1},{"id":401,"word":"加魯姆","answer":"加魯姆是古羅馬流行的魚醬，以魚內臟和鹽長時間發酵取得鹹鮮液體。它既作調味料，也曾是重要的跨地區貿易商品。","hint1":"軍事","hint2":"美食","hint3":"數學","correctHintIndex":2},{"id":402,"word":"海市蜃樓","answer":"海市蜃樓是不同溫度空氣層令光線彎曲，造成遠方景物位置變形、倒轉或像漂浮空中的光學現象，並非真正出現城市。","hint1":"交通","hint2":"植物","hint3":"物理","correctHintIndex":3},{"id":403,"word":"南海泡沫","answer":"南海泡沫是十八世紀英國南海公司股價因投機和誇大前景急升，之後迅速崩潰的金融事件，令大量投資者蒙受損失。","hint1":"經濟","hint2":"交通","hint3":"美食","correctHintIndex":1},{"id":404,"word":"格林定律","answer":"格林定律描述原始印歐語輔音在日耳曼語族中有規律地改變，例如部分塞音轉成擦音，證明語音演變並非完全隨機。","hint1":"法律","hint2":"語言","hint3":"物理","correctHintIndex":2},{"id":405,"word":"耳中樂","answer":"耳中樂是音樂性幻聽的形象說法，患者在沒有外界聲源時仍清楚聽見旋律、歌曲或樂器聲，可能與聽力下降或神經疾病有關。","hint1":"音樂","hint2":"宗教","hint3":"醫學","correctHintIndex":3},{"id":406,"word":"焚風","answer":"焚風是濕空氣越過山脈後，在背風坡下降並升溫形成的乾熱風。它能迅速融雪、降低濕度，也可能增加山火風險。","hint1":"自然","hint2":"美食","hint3":"醫學","correctHintIndex":1},{"id":407,"word":"魯邦種","answer":"魯邦種是以麵粉和水培養野生酵母及乳酸菌的天然酵母種。它能使麵團膨脹，並帶來酸香、複雜風味和較長保鮮期。","hint1":"宗教","hint2":"美食","hint3":"自然","correctHintIndex":2},{"id":408,"word":"墨菲定律","answer":"墨菲定律常被概括為「凡是可能出錯的事，終會出錯」。它並非科學定律，而是提醒工程設計必須預想失誤和最壞情況。","hint1":"法律","hint2":"自然","hint3":"科技","correctHintIndex":3},{"id":409,"word":"損失厭惡","answer":"損失厭惡是同等金額的損失帶來的痛苦，通常大於獲利帶來的快樂。它會令人過度保守，也可能不願及時承認錯誤。","hint1":"經濟","hint2":"醫學","hint3":"體育","correctHintIndex":1},{"id":410,"word":"反義同詞","answer":"反義同詞是同一個詞在不同語境中，可以表達彼此相反的意思。例如英文某些詞既可表示加入，也可表示移除，需靠上下文判斷。","hint1":"心理學","hint2":"語言","hint3":"數學","correctHintIndex":2},{"id":411,"word":"光誘發噴嚏反射","answer":"光誘發噴嚏反射是部分人由暗處走到強光下便連續打噴嚏的現象，原因可能是視神經訊號誤刺激鄰近的三叉神經。","hint1":"社會","hint2":"攝影","hint3":"醫學","correctHintIndex":3},{"id":412,"word":"布羅肯幽靈","answer":"布羅肯幽靈是觀察者背向陽光站在高處時，影子被投射到雲霧上並顯得巨大，周圍有時還會出現彩色光環。","hint1":"自然","hint2":"戲劇","hint3":"宗教","correctHintIndex":1},{"id":413,"word":"塔坦","answer":"塔坦是一種把水果和糖先鋪在模底，再覆上麵皮烘烤的法式甜點。出爐後倒扣，焦糖化水果便成為表面，傳說源於一次失誤。","hint1":"舞蹈","hint2":"美食","hint3":"建築","correctHintIndex":2},{"id":414,"word":"拜占庭將軍問題","answer":"拜占庭將軍問題描述分散節點在部分成員故障或說謊時，如何對同一行動達成可靠共識，是分散式系統和區塊鏈的重要難題。","hint1":"軍事","hint2":"歷史","hint3":"科技","correctHintIndex":3},{"id":415,"word":"偽裝巡洋艦","answer":"偽裝巡洋艦是外表像普通商船，實際藏有火炮和軍事設備的武裝船隻。它可接近目標後突然揭開武器，攻擊補給航線。","hint1":"軍事","hint2":"戲劇","hint3":"旅遊","correctHintIndex":1},{"id":416,"word":"湯姆斯威夫特句","answer":"湯姆斯威夫特句是一種把說話內容與副詞組成雙關語的幽默句式，例如角色說「我沒有鉛筆」，後面接上「不著重地說」。","hint1":"交通","hint2":"語言","hint3":"法律","correctHintIndex":2},{"id":417,"word":"章魚壺心肌症","answer":"章魚壺心肌症又稱心碎症候群，強烈情緒或壓力會令左心室短暫變成日本捕章魚陶壺的形狀，症狀與心臟病發相似。","hint1":"文學","hint2":"音樂","hint3":"醫學","correctHintIndex":3},{"id":418,"word":"冰針","answer":"冰針是寒冷天氣下從土壤表面長出的細長冰柱。土壤水分沿毛細作用上升，在地面附近凍結並持續把冰柱向上推高。","hint1":"自然","hint2":"工藝","hint3":"醫學","correctHintIndex":1},{"id":419,"word":"煙點","answer":"煙點是食用油受熱後開始持續冒煙並明顯分解的溫度。不同油脂煙點各異，精製程度、雜質和重複使用都會影響數值。","hint1":"天文","hint2":"美食","hint3":"醫學","correctHintIndex":2},{"id":420,"word":"蟻群最佳化","answer":"蟻群最佳化模仿螞蟻以費洛蒙尋找食物路徑。較短路線會較快累積訊號，演算法因此逐步找出路線安排等問題的較佳解。","hint1":"生物","hint2":"交通","hint3":"科技","correctHintIndex":3},{"id":421,"word":"幽靈軍隊","answer":"幽靈軍隊是二戰時美軍的戰術欺敵部隊，使用充氣坦克、假無線電和音效，讓敵軍誤判部隊位置、規模和進攻方向。","hint1":"軍事","hint2":"民間傳說","hint3":"宗教","correctHintIndex":1},{"id":422,"word":"元音大推移","answer":"元音大推移是中古英語到近代英語期間，長元音發音發生連鎖變化的歷史現象。它令英語拼字與現代讀音出現大量差距。","hint1":"社會","hint2":"語言","hint3":"武術","correctHintIndex":2},{"id":423,"word":"銀質沉著症","answer":"銀質沉著症是銀粒子長期沉積在皮膚和組織內，令膚色永久變成藍灰色的情況。它常與長期接觸或服用含銀物質有關。","hint1":"工藝","hint2":"天文","hint3":"醫學","correctHintIndex":3},{"id":424,"word":"食物里程","answer":"食物里程是食物由生產地運到消費者所經距離的概念，用來討論運輸碳排放。不過完整環境影響還包括種植、冷藏和包裝方式。","hint1":"自然","hint2":"經濟","hint3":"舞蹈","correctHintIndex":1},{"id":425,"word":"火焰雪山","answer":"火焰雪山又稱焗阿拉斯加，以蛋糕和冰淇淋包上厚蛋白霜再短時間高溫烘烤。蛋白霜隔熱，使外層上色而冰淇淋仍保持冰冷。","hint1":"軍事","hint2":"美食","hint3":"地理","correctHintIndex":2},{"id":426,"word":"安提基特拉機械","answer":"安提基特拉機械是古希臘製造的齒輪式天文計算裝置。轉動手柄後，可顯示太陽、月球週期、曆法，以及預測日月食時間。","hint1":"軍事","hint2":"體育","hint3":"科技","correctHintIndex":3},{"id":427,"word":"詹金斯耳朵戰爭","answer":"詹金斯耳朵戰爭是十八世紀英國與西班牙之間的殖民戰爭。名稱源於英國船長詹金斯聲稱遭西班牙海警割去一隻耳朵。","hint1":"軍事","hint2":"醫學","hint3":"交通","correctHintIndex":1},{"id":428,"word":"雪克隆","answer":"雪克隆是可反覆套用並替換部分詞語的流行句式模板，例如「X是新的Y」。名稱本身源於一種被媒體不斷改寫的雪地描述。","hint1":"科技","hint2":"語言","hint3":"動物","correctHintIndex":2},{"id":429,"word":"觀念運動失用","answer":"觀念運動失用是患者理解指令且肌力正常，卻無法示範已學會動作的神經障礙，例如不能按要求模仿刷牙或使用剪刀。","hint1":"舞蹈","hint2":"法律","hint3":"醫學","correctHintIndex":3},{"id":430,"word":"海煙","answer":"海煙是一種出現在寒冷海面上的蒸發霧。當極冷空氣流過較暖水面，蒸發出的水氣迅速凝結，看起來像白煙從海上升起。","hint1":"自然","hint2":"軍事","hint3":"美容","correctHintIndex":1},{"id":431,"word":"乳酸發酵","answer":"乳酸發酵是乳酸菌把糖轉化成乳酸的過程。酸度上升能抑制部分腐敗微生物，常用於製作乳酪、泡菜、酸菜及醃漬食品。","hint1":"醫學","hint2":"美食","hint3":"工程","correctHintIndex":2},{"id":432,"word":"梅特卡夫定律","answer":"梅特卡夫定律認為通訊網絡的潛在價值，會隨使用者數量的平方增長，因為參與者增加時，可建立的連接組合大幅上升。","hint1":"醫學","hint2":"禮儀","hint3":"科技","correctHintIndex":3},{"id":433,"word":"氣球炸彈","answer":"氣球炸彈是利用高空風帶運送爆炸物的武器。二戰時日本曾放出大量氫氣球，希望跨越太平洋後在北美落下並引發破壞。","hint1":"軍事","hint2":"民俗","hint3":"自然","correctHintIndex":1},{"id":434,"word":"尾語重複","answer":"尾語重複是在連續句子或分句結尾，反覆使用相同詞語的修辭手法。它可製造回響與強調效果，位置與首語重複相反。","hint1":"醫學","hint2":"語言","hint3":"海洋","correctHintIndex":2},{"id":435,"word":"進行性骨化性纖維發育不良症","answer":"進行性骨化性纖維發育不良症會令肌肉與結締組織逐漸變成骨頭，使關節活動受限；受傷或手術反而可能加速骨化。","hint1":"藝術","hint2":"建築","hint3":"醫學","correctHintIndex":3},{"id":436,"word":"冰泡","answer":"冰泡是湖底有機物分解產生的甲烷氣泡，被冬季湖水逐層凍結後形成的景象。不同時間上升的氣泡會被封在不同深度。","hint1":"自然","hint2":"體育","hint3":"藝術","correctHintIndex":1},{"id":437,"word":"凝乳酶","answer":"凝乳酶是一組能使牛奶蛋白凝結的酵素，製作芝士時會令固體凝乳與液態乳清分離。傳統來源是幼小反芻動物胃部。","hint1":"醫學","hint2":"美食","hint3":"化學","correctHintIndex":2},{"id":438,"word":"艾奧洛斯球","answer":"艾奧洛斯球是古代以蒸氣推動旋轉的空心金屬球。水受熱後，蒸氣從彎曲噴嘴噴出並產生反作用力，被視為早期蒸汽機概念。","hint1":"神話","hint2":"體育","hint3":"科技","correctHintIndex":3},{"id":439,"word":"哈巴谷計劃","answer":"哈巴谷計劃是二戰時構想以冰和木漿混合材料建造巨型航母的方案。材料可在海上修補，但計劃最終沒有正式投入建造。","hint1":"軍事","hint2":"飲品","hint3":"旅遊","correctHintIndex":1},{"id":440,"word":"斯普納音誤","answer":"斯普納音誤是說話時意外交換兩個詞的開頭聲音，產生滑稽或荒謬的新句子。名稱來自以口誤聞名的英國牧師斯普納。","hint1":"醫學","hint2":"語言","hint3":"美食","correctHintIndex":2},{"id":441,"word":"痴笑性癲癇","answer":"痴笑性癲癇以突然、不合情境且無法控制的笑聲為主要發作表現。患者未必感到快樂，部分病例與下丘腦病變有關。","hint1":"戲劇","hint2":"歷史","hint3":"醫學","correctHintIndex":3},{"id":442,"word":"微爆流","answer":"微爆流是雷暴中強烈下沉氣流撞向地面後向四周爆散的現象。它範圍不大但風力猛烈，對低空起降中的飛機尤其危險。","hint1":"自然","hint2":"經濟","hint3":"醫學","correctHintIndex":1},{"id":443,"word":"酒石","answer":"酒石是葡萄酒中酒石酸鹽形成的無害晶體，常沉在瓶底或黏在酒塞上。它不代表酒已變壞，低溫會令晶體更容易析出。","hint1":"地質","hint2":"飲品","hint3":"醫學","correctHintIndex":2},{"id":444,"word":"金絲雀發布","answer":"金絲雀發布是先把新版功能提供給少量用戶，觀察錯誤和效能後再逐步擴大。名稱源於礦工以金絲雀預警有毒氣體的做法。","hint1":"動物","hint2":"音樂","hint3":"科技","correctHintIndex":3},{"id":445,"word":"桶戰爭","answer":"桶戰爭是十四世紀意大利摩德納與博洛尼亞衝突的俗稱。傳說木桶被奪成為象徵，但戰爭實際源於兩城長期的政治和領土矛盾。","hint1":"軍事","hint2":"美食","hint3":"文學","correctHintIndex":1},{"id":446,"word":"蛋玉米詞","answer":"蛋玉米詞是把陌生詞語誤聽成發音相近、而且在語意上似乎合理的新說法。英文名稱源於有人把橡果誤寫成蛋玉米。","hint1":"農業","hint2":"語言","hint3":"美食","correctHintIndex":2},{"id":447,"word":"庫魯病","answer":"庫魯病是由異常朊蛋白引起的致命神經退化疾病，曾在巴布亞新幾內亞因喪葬食人習俗傳播，會造成顫抖和失去協調。","hint1":"舞蹈","hint2":"美食","hint3":"醫學","correctHintIndex":3},{"id":448,"word":"霧虹","answer":"霧虹是陽光照射細小霧滴後形成的白色或淡彩色光弧。由於霧滴比雨滴細，顏色互相重疊，因此不像一般彩虹般鮮明。","hint1":"自然","hint2":"珠寶","hint3":"文學","correctHintIndex":1},{"id":449,"word":"賽風","answer":"賽風是虹吸咖啡壺的音譯名稱。加熱產生的蒸氣壓把熱水推到上壺萃取咖啡，熄火後壓力下降，咖啡再經濾布回流。","hint1":"自然","hint2":"飲品","hint3":"醫學","correctHintIndex":2},{"id":450,"word":"彩虹表","answer":"彩虹表是預先計算大量密碼雜湊結果的查找資料，用來加速破解未加鹽的密碼。加入隨機鹽值可大幅降低它的實用性。","hint1":"自然","hint2":"藝術","hint3":"科技","correctHintIndex":3},{"id":451,"word":"豬戰爭","answer":"豬戰爭是十九世紀美國與英國之間的邊界對峙。事件因一隻闖入農地的豬被射殺而升級，雙方派兵，但最終沒有爆發正式戰鬥。","hint1":"軍事","hint2":"農業","hint3":"醫學","correctHintIndex":1},{"id":452,"word":"埃奧利亞豎琴","answer":"埃奧利亞豎琴是一種由風吹奏的弦樂器。氣流經過琴弦時使其自行振動，產生持續而飄忽的聲音，演奏者不用直接撥弦。","hint1":"交通","hint2":"音樂","hint3":"歷史","correctHintIndex":2},{"id":453,"word":"爆頭症候群","answer":"爆頭症候群是一種睡眠相關現象。患者在入睡或醒來時，突然感覺腦內傳出爆炸、槍聲或撞擊巨響，但外界並沒有真正聲源。","hint1":"遊戲","hint2":"體育","hint3":"醫學","correctHintIndex":3},{"id":454,"word":"太陽狗","answer":"太陽狗又稱幻日，是太陽左右兩側出現的彩色光斑。陽光經高空六角形冰晶折射後，便可能在距離太陽約二十二度的位置形成。","hint1":"自然","hint2":"軍事","hint3":"交通","correctHintIndex":1},{"id":455,"word":"冰滴咖啡","answer":"冰滴咖啡以冷水一滴一滴通過咖啡粉，經數小時完成萃取。低溫會減少部分苦味和酸澀，成品通常濃厚並適合冷藏飲用。","hint1":"地理","hint2":"飲品","hint3":"歷史","correctHintIndex":2},{"id":456,"word":"柯里化","answer":"柯里化是把接受多個參數的函數，轉換成一連串每次只接受一個參數的函數。這種技巧方便重用部分參數並組合程式功能。","hint1":"美食","hint2":"服裝","hint3":"科技","correctHintIndex":3},{"id":457,"word":"鴿子導彈","answer":"鴿子導彈是美國心理學家史金納參與的導引研究，訓練鴿子啄擊螢幕上的目標影像，以控制炸彈方向，後來被電子系統取代。","hint1":"軍事","hint2":"動物","hint3":"交通","correctHintIndex":1},{"id":458,"word":"人聲打擊","answer":"人聲打擊又稱Beatbox，是用嘴唇、舌頭、喉嚨和呼吸模仿鼓聲、低音及電子效果的表演方式，一個人也能建立完整節奏。","hint1":"武術","hint2":"音樂","hint3":"醫學","correctHintIndex":2},{"id":459,"word":"明晰夢","answer":"明晰夢是做夢者在夢境中知道自己正在做夢的狀態。部分人能有限度改變場景或行動，但身體仍處於睡眠，並非真正清醒。","hint1":"電影","hint2":"宗教","hint3":"醫學","correctHintIndex":3},{"id":460,"word":"死亡冰指","answer":"死亡冰指是極地海冰下形成的中空冰柱。冰層排出的低溫高鹽鹵水向下沉，沿途凍結海水，使冰柱逐漸伸向海床。","hint1":"自然","hint2":"武術","hint3":"醫學","correctHintIndex":1},{"id":461,"word":"阿芙佳朵","answer":"阿芙佳朵是把熱濃縮咖啡淋在香草冰淇淋或義式冰淇淋上的意大利甜品。名稱意為「被淹沒」，要趁冷熱交錯時食用。","hint1":"宗教","hint2":"飲品","hint3":"歷史","correctHintIndex":2},{"id":462,"word":"圖靈測試","answer":"圖靈測試讓人類評審以文字分別與人和機器對話。若評審無法可靠判斷誰是機器，便可說機器在對話中表現出類似人類的能力。","hint1":"教育","hint2":"醫學","hint3":"科技","correctHintIndex":3},{"id":463,"word":"口袋戰艦","answer":"口袋戰艦是外界對德國德意志級裝甲艦的稱呼。它在條約限制的排水量下配備大型火炮，火力強於巡洋艦但速度較戰艦快。","hint1":"軍事","hint2":"服裝","hint3":"遊戲","correctHintIndex":1},{"id":464,"word":"音列主義","answer":"音列主義以預先排列的音高序列組織作品。十二音音樂會使用全部十二個半音，並透過原列、逆行和倒影避免傳統調性中心。","hint1":"數學","hint2":"音樂","hint3":"法律","correctHintIndex":2},{"id":465,"word":"夢食症","answer":"夢食症是人在半睡半醒狀態下起床進食，翌日可能完全不記得。患者有時會吃下生食、不可食物品，甚至進行危險的烹調行為。","hint1":"美食","hint2":"民間傳說","hint3":"醫學","correctHintIndex":3},{"id":466,"word":"光柱","answer":"光柱是光源上方或下方出現的垂直光帶。空氣中大量近乎水平的冰晶像小鏡子一樣反射太陽光、月光或地面燈光而形成。","hint1":"自然","hint2":"建築","hint3":"軍事","correctHintIndex":1},{"id":467,"word":"米德","answer":"米德是以蜂蜜和水發酵製成的酒精飲品，可加入水果、香料或穀物調味。它在歐洲、非洲和亞洲多種古老文化中都有紀錄。","hint1":"神話","hint2":"飲品","hint3":"工程","correctHintIndex":2},{"id":468,"word":"摩爾定律","answer":"摩爾定律是半導體產業的經驗觀察，指出積體電路可容納的晶體管數量大約每隔一段時間倍增，長期推動運算能力提升和成本下降。","hint1":"法律","hint2":"飲品","hint3":"科技","correctHintIndex":3},{"id":469,"word":"蝙蝠炸彈","answer":"蝙蝠炸彈是二戰期間美國研究的武器計劃，打算讓蝙蝠攜帶小型燃燒彈，飛入日本木造城市建築後同時引發大量火災。","hint1":"軍事","hint2":"動物","hint3":"電影","correctHintIndex":1},{"id":470,"word":"魔鬼音程","answer":"魔鬼音程通常指增四度或減五度，兩音相距三個全音。它因聲響不穩定而得名，但中世紀教會全面禁止它的說法被誇大。","hint1":"數學","hint2":"音樂","hint3":"媒體","correctHintIndex":2},{"id":471,"word":"三甲胺尿症","answer":"三甲胺尿症令身體無法正常分解帶魚腥味的三甲胺，氣味會從汗液、尿液和呼氣排出。疾病本身不具傳染性。","hint1":"農業","hint2":"美食","hint3":"醫學","correctHintIndex":3},{"id":472,"word":"火彩虹","answer":"火彩虹正式名稱是環地平弧，是陽光經高空卷雲中的冰晶折射後形成的彩色光帶。它通常接近水平，並不屬於真正的彩虹。","hint1":"自然","hint2":"民俗","hint3":"化學","correctHintIndex":1},{"id":473,"word":"蛇麻","answer":"蛇麻是啤酒花的別稱，其雌花序能為啤酒提供苦味、香氣和一定防腐效果。不同品種可帶來柑橘、花香、草本或樹脂氣味。","hint1":"動物","hint2":"飲品","hint3":"醫學","correctHintIndex":2},{"id":474,"word":"蜜罐系統","answer":"蜜罐系統是故意設置得像真實目標的誘捕電腦或服務。它吸引攻擊者進入，讓防守者觀察手法、收集證據並及早發現入侵。","hint1":"農業","hint2":"飲品","hint3":"科技","correctHintIndex":3},{"id":475,"word":"足球戰爭","answer":"足球戰爭是一九六九年薩爾瓦多與洪都拉斯之間的短期戰爭。世界盃外圍賽加劇民間敵意，但土地、移民和政治衝突才是主因。","hint1":"軍事","hint2":"體育","hint3":"電影","correctHintIndex":1},{"id":476,"word":"具象音樂","answer":"具象音樂以錄下的火車、機器、人聲和自然聲作為素材，再經剪接、變速和重組創作。它不一定依賴傳統樂器或樂譜。","hint1":"建築","hint2":"音樂","hint3":"交通","correctHintIndex":2},{"id":477,"word":"跳躍法國人症候群","answer":"跳躍法國人症候群是一種罕見的過度驚嚇反應。患者受突然聲響或觸碰時，會猛烈跳動、模仿動作，甚至不由自主服從指令。","hint1":"舞蹈","hint2":"歷史","hint3":"醫學","correctHintIndex":3},{"id":478,"word":"地震光","answer":"地震光是有人在地震前後看見的異常發光現象，可能呈光球、閃光或彩色光帶。科學界提出多種解釋，但形成機制仍未有定論。","hint1":"自然","hint2":"宗教","hint3":"攝影","correctHintIndex":1},{"id":479,"word":"糖化休止","answer":"糖化休止是啤酒釀造時，把碎麥芽維持在特定溫度，讓酵素把澱粉分解成可發酵糖。溫度會影響酒體、甜度和發酵程度。","hint1":"醫學","hint2":"飲品","hint3":"出版","correctHintIndex":2},{"id":480,"word":"阿姆達爾定律","answer":"阿姆達爾定律說明系統加速受到無法並行部分限制。即使增加大量處理器，只要仍有一段程式必須循序執行，整體提升便有上限。","hint1":"軍事","hint2":"音樂","hint3":"科技","correctHintIndex":3},{"id":481,"word":"鴯鶓戰爭","answer":"鴯鶓戰爭是一九三二年澳洲軍方以機關槍協助農民驅趕大量鴯鶓的行動。鳥群分散而高速移動，令任務效果十分有限。","hint1":"軍事","hint2":"動物","hint3":"體育","correctHintIndex":1},{"id":482,"word":"點音主義","answer":"點音主義把短促單音分散到不同樂器、音域和音色之間，聲音像一個個孤立色點，旋律不再由單一樂器連續演奏。","hint1":"醫學","hint2":"音樂","hint3":"經濟","correctHintIndex":2},{"id":483,"word":"自釀酒症候群","answer":"自釀酒症候群是腸道微生物把食物中的碳水化合物發酵成酒精，使患者未飲酒也出現醉態，血液酒精濃度可能上升。","hint1":"飲品","hint2":"法律","hint3":"醫學","correctHintIndex":3},{"id":484,"word":"火焰龍捲","answer":"火焰龍捲是大型火場中的熱空氣快速上升並旋轉，捲起火焰和燃燒碎屑形成的火柱。它可令火勢變得更集中和難以控制。","hint1":"自然","hint2":"舞蹈","hint3":"美食","correctHintIndex":1},{"id":485,"word":"貴腐","answer":"貴腐是葡萄受特定灰葡萄孢菌感染後，果皮微破並逐漸失水的現象。糖分和香氣因此濃縮，可用來釀製甜度高、風味複雜的酒。","hint1":"醫學","hint2":"飲品","hint3":"出版","correctHintIndex":2},{"id":486,"word":"橡皮鴨除錯法","answer":"橡皮鴨除錯法是程式設計者逐行向橡皮鴨解釋程式碼。把思路說出口時，往往會發現遺漏的假設、矛盾或錯誤步驟。","hint1":"遊戲","hint2":"醫學","hint3":"科技","correctHintIndex":3},{"id":487,"word":"鐵甲列車","answer":"鐵甲列車是加裝裝甲和武器的軍用火車，可沿鐵路運送士兵、炮火和補給。它機動力高，但路線固定，容易受破壞鐵軌限制。","hint1":"軍事","hint2":"交通","hint3":"遊戲","correctHintIndex":1},{"id":488,"word":"四分三十三秒","answer":"《四分三十三秒》是約翰・凱奇創作的音樂作品。演奏者在三個樂章中不主動奏樂，觀眾聽到的環境聲便成為作品內容。","hint1":"天文","hint2":"音樂","hint3":"法律","correctHintIndex":2},{"id":489,"word":"變形視","answer":"變形視是視覺影像出現扭曲的症狀，患者可能看見直線彎曲、物件變大變小，或臉孔局部移位，但外界物體本身沒有改變。","hint1":"藝術","hint2":"攝影","hint3":"醫學","correctHintIndex":3},{"id":490,"word":"球狀閃電","answer":"球狀閃電是雷暴期間有人報告看見的發光球體，可在空中移動並維持數秒。現象極為罕見，其物理成因至今仍未有定論。","hint1":"自然","hint2":"遊戲","hint3":"醫學","correctHintIndex":1},{"id":491,"word":"康普茶","answer":"康普茶是以加糖茶水和酵母、醋酸菌共生菌膜發酵而成的酸味飲品。發酵會產生少量氣泡、酸類，亦可能含微量酒精。","hint1":"醫學","hint2":"飲品","hint3":"宗教","correctHintIndex":2},{"id":492,"word":"生日攻擊","answer":"生日攻擊利用雜湊函數中找到兩個相同輸出的機率，增長速度比直覺快的特性。名稱源於生日悖論，而非攻擊個人生日資料。","hint1":"民俗","hint2":"醫學","hint3":"科技","correctHintIndex":3},{"id":493,"word":"聲音大炮","answer":"聲音大炮是把高度集中的強烈聲波投向遠方的裝置，可用於警告、驅散或通訊。近距離高音量可能造成疼痛和聽力受損。","hint1":"軍事","hint2":"音樂","hint3":"醫學","correctHintIndex":1},{"id":494,"word":"藍調音","answer":"藍調音是演奏時刻意把某些音高壓低或游移的音，常見於藍調和爵士樂。它不完全符合西方平均律，能產生哀傷和張力感。","hint1":"飲品","hint2":"音樂","hint3":"醫學","correctHintIndex":2},{"id":495,"word":"純詞盲","answer":"純詞盲是腦部受損後無法理解書面文字，但仍能書寫和說話的罕見障礙。患者可能看見字形，卻像面對陌生符號一樣無法閱讀。","hint1":"文學","hint2":"宗教","hint3":"醫學","correctHintIndex":3},{"id":496,"word":"夜光雲","answer":"夜光雲是一種形成於中氣層高空的冰晶雲。日落後地面已變暗，但高空冰晶仍被陽光照射，因此呈現銀白或藍色光芒。","hint1":"自然","hint2":"軍事","hint3":"美食","correctHintIndex":1},{"id":497,"word":"克麗瑪","answer":"克麗瑪是濃縮咖啡表面的金棕色泡沫層，由二氧化碳、咖啡油脂和微細顆粒乳化形成，可反映咖啡豆新鮮度及萃取狀態。","hint1":"宗教","hint2":"飲品","hint3":"醫學","correctHintIndex":2},{"id":498,"word":"藍綠部署","answer":"藍綠部署同時維持兩套近乎相同的正式環境，一套服務用戶，另一套安裝新版。切換流量即可快速發布，也方便出錯時回復舊版。","hint1":"軍事","hint2":"美容","hint3":"科技","correctHintIndex":3},{"id":499,"word":"Q船","answer":"Q船是第一次世界大戰時偽裝成無害商船的反潛艦艇。它故意引誘潛艇浮上海面攻擊，再打開隱藏炮位進行反擊。","hint1":"軍事","hint2":"交通","hint3":"語言","correctHintIndex":1},{"id":500,"word":"機會音樂","answer":"機會音樂把部分創作或演奏決定交給隨機程序，例如擲骰、抽籤或由演奏者自由選擇順序，使每次呈現可能不同。","hint1":"經濟","hint2":"音樂","hint3":"遊戲","correctHintIndex":2}];
+
+let BANK = EMBEDDED_BANK.slice();   // usable immediately, no waiting
+
+async function loadBank(){
+  // FLAT build: full 500-question bank already embedded above. Nothing to fetch.
+}
+
+const MODE_META = {
+  none:  {ico:'🙈', name:'提示：關'},
+  hints: {ico:'🧭', name:'提示：開'}
+};
+
+// ---------- persisted settings ----------
+const store = {
+  wake:     loadBool("cfg.wake", false),
+  haptic:   loadBool("cfg.haptic", true),
+  hintMode: loadStr("cfg.hintMode", "none"),   // "none" = 冇提示, "hints" = 有提示
+  peekMode: loadStr("cfg.peekMode", "hold"),   // "hold" = 撳實先睇, "timed" = 限時睇
+  peekSecs: loadInt("cfg.peekSecs", 10),        // auto-hide seconds in timed mode
+};
+function loadBool(k,d){ try{const v=localStorage.getItem(k); return v===null?d:v==="1";}catch(e){return d;} }
+function loadInt(k,d){ try{const v=localStorage.getItem(k); return v===null?d:parseInt(v,10);}catch(e){return d;} }
+function loadStr(k,d){ try{const v=localStorage.getItem(k); return v===null?d:v;}catch(e){return d;} }
+function save(k,v){ try{localStorage.setItem(k, v);}catch(e){} }
+
+// ---------- runtime state ----------
+let state = { mode: store.hintMode, current:null };
+let recentIds = [];            // avoid repeating the last few questions
+
+// ---------- navigation ----------
+const screens = {
+  home:'screen-home', roleSelect:'screen-roleSelect',
+  spinThinker:'screen-spinThinker', spinHonest:'screen-spinHonest',
+  question:'screen-question',
+  answerGate:'screen-answerGate', answer:'screen-answer',
+  point:'screen-point', result:'screen-result',
+  settings:'screen-settings', help:'screen-help'
+};
+function go(name){
+  Object.values(screens).forEach(id=>document.getElementById(id).classList.remove('active'));
+  document.getElementById(screens[name]).classList.add('active');
+  if(name==='settings') syncSettingsUI();
+  if(name==='answerGate') resetGate();
+  if(name==='point' && window.resetSlider) resetSlider();   // reset the inline 開估 slider
+}
+
+// ---------- haptics ----------
+function buzz(ms){ if(store.haptic && navigator.vibrate){ try{navigator.vibrate(ms);}catch(e){} } }
+
+// ---------- round flow ----------
+// 開始出題 / 下一題 — mode comes from settings (store.hintMode), draw and show
+function startRound(){
+  buzz(12);
+  drawQuestion();
+  go('question');
+}
+
+// ---------- role select ----------
+// Flow: 選角 → 轉諗樣 → (tap 去老實人) → 轉老實人 → (tap 返主頁).
+// Each spin twirls the finger to a random direction. Advancing is fully manual
+// so nobody gets bounced to the next role before seeing where it landed.
+
+function startRoleFlow(){
+  // reset both hub labels, jump straight into 諗樣's spin screen
+  document.getElementById('pick-thinker-go').textContent = '轉手指 ›';
+  document.getElementById('pick-honest-go').textContent = '轉手指 ›';
+  go('spinThinker');
+}
+
+function spinRole(which){
+  const isThinker = (which==='thinker');
+  const el = document.getElementById(isThinker ? 'arrow-thinker' : 'arrow-honest');
+  if(!el) return;
+  buzz(15);
+
+  const prev = parseInt(el.dataset.acc||'0', 10);
+  const prevAngle = ((prev % 360) + 360) % 360;
+
+  // pick a NEW landing angle that's meaningfully far from where it is now,
+  // so consecutive spins clearly point somewhere different (never "same person")
+  let target = Math.floor(Math.random()*360);
+  let tries = 0;
+  while(Math.min(Math.abs(target-prevAngle), 360-Math.abs(target-prevAngle)) < 70 && tries < 20){
+    target = Math.floor(Math.random()*360);
+    tries++;
+  }
+
+  // several full turns for a lively twirl (4–6), plus the delta to reach target
+  const spins = (4 + Math.floor(Math.random()*3)) * 360;
+  const delta = ((target - prevAngle) + 360) % 360;
+  const nextRot = prev + spins + delta;
+
+  el.dataset.acc = nextRot;
+  el.style.setProperty('--rot', nextRot + 'deg');
+
+  // tick the hub label so people know this role's been assigned
+  const lbl = document.getElementById(isThinker ? 'pick-thinker-go' : 'pick-honest-go');
+  if(lbl) lbl.textContent = '✓ 已轉';
+}
+
+function drawQuestion(){
+  state.mode = store.hintMode;                  // start from the settings default
+  const deck = BANK.length ? BANK : EMBEDDED_BANK;
+  // pick a random question, avoiding the last few so it doesn't repeat
+  let pool = deck.filter(q => !recentIds.includes(q.id));
+  if(!pool.length) pool = deck;                 // deck smaller than the memory window
+  const q = pool[Math.floor(Math.random()*pool.length)];
+  state.current = q;
+  recentIds.push(q.id);
+  const keep = Math.min(5, Math.max(0, deck.length - 1));
+  while(recentIds.length > keep) recentIds.shift();
+
+  document.getElementById('q-word').textContent = q.word;
+  renderQuestionMode();                         // badge + hints per current mode
+}
+
+// 換題目：抽新一題但保留而家嘅提示模式（唔會 reset 返設定預設），
+// 避免即時重複，並加少少切換動畫。喺出題頁㩒「換題目」時呼叫。
+function nextQuestion(){
+  const deck = BANK.length ? BANK : EMBEDDED_BANK;
+  if(!deck.length) return;
+  let pool = deck.filter(q => !recentIds.includes(q.id));
+  if(!pool.length) pool = deck.filter(q => !state.current || q.id !== state.current.id);
+  if(!pool.length) pool = deck;
+  const q = pool[Math.floor(Math.random()*pool.length)];
+  state.current = q;
+  recentIds.push(q.id);
+  const keep = Math.min(5, Math.max(0, deck.length - 1));
+  while(recentIds.length > keep) recentIds.shift();
+
+  const wordEl = document.getElementById('q-word');
+  wordEl.textContent = q.word;
+  renderQuestionMode();                          // keeps state.mode as-is
+  buzz(10);
+
+  // little swap animations (respect reduced-motion via the global rule)
+  wordEl.classList.remove('swapping'); void wordEl.offsetWidth; wordEl.classList.add('swapping');
+  const swapBtn = document.querySelector('.btn-swap');
+  if(swapBtn){ swapBtn.classList.remove('spin'); void swapBtn.offsetWidth; swapBtn.classList.add('spin'); }
+}
+
+// Render the question screen's mode badge + hints for the CURRENT state.mode.
+// Called on draw and whenever the badge toggle flips the mode mid-question.
+function renderQuestionMode(){
+  const q = state.current; if(!q) return;
+  const meta = MODE_META[state.mode] || MODE_META.hints;
+  document.getElementById('q-modeico').textContent = meta.ico;
+  document.getElementById('q-modename').textContent = meta.name;
+  const hints = document.getElementById('q-hints');
+  const qbody = hints.closest('.q-body');
+  if(state.mode === 'hints'){
+    hints.style.display = '';
+    if(qbody) qbody.classList.remove('no-hints');
+    document.getElementById('q-h1').textContent = q.hint1;
+    document.getElementById('q-h2').textContent = q.hint2;
+    document.getElementById('q-h3').textContent = q.hint3;
+  }else{
+    hints.style.display = 'none';
+    if(qbody) qbody.classList.add('no-hints');
+  }
+}
+
+// Tap the header badge to flip 有提示 / 冇提示 on the spot. This also updates the
+// saved default so the choice sticks for later rounds.
+function toggleQuestionMode(){
+  state.mode = (state.mode === 'hints') ? 'none' : 'hints';
+  store.hintMode = state.mode;
+  save('cfg.hintMode', store.hintMode);
+  buzz(10);
+  renderQuestionMode();
+}
+
+// ---------- answer peek ----------
+// Two modes (chosen in settings):
+//   hold  — press and hold the button; releasing (or safety timeout) hides instantly
+//   timed — tap "開始睇" once to open; counts down store.peekSecs, then the card
+//           greys out and locks with "夠鐘，準備開始" (no second peek this round)
+let peekCountTimer=null;
+
+function fillAnswer(){
+  const q = state.current; if(!q) return;
+  document.getElementById('ans-word').textContent = q.word;
+  document.getElementById('ans-body').textContent = q.answer;
+  // 真方向 only means something when hints are in play
+  const chip = document.getElementById('ans-truehint');
+  if(state.mode === 'hints'){
+    chip.style.display = '';
+    chip.textContent = '真方向：' + q['hint'+q.correctHintIndex];
+  }else{
+    chip.style.display = 'none';
+  }
+}
+
+// reset the gate every time we arrive fresh (from the question screen), so a
+// spent round starts clean. Returning here after a peek does NOT reset.
+function resetGate(){
+  const btn = document.getElementById('peek-btn');
+  btn.disabled = false;
+  btn.style.display = '';
+  document.getElementById('gate-next-btn').style.display = 'none';   // not peeked yet
+  document.getElementById('secret-wrap').classList.remove('expired');
+  document.getElementById('expired-overlay').classList.remove('show');
+  clearInterval(peekCountTimer);
+  updateGateCopy();
+  bindPeekButton();          // (re)wire handlers for the current peek mode
+}
+
+// Wire the peek button for exactly one mode, removing the other mode's handlers.
+// hold  = press & hold (pointerdown opens, release closes), NO timer.
+// timed = single tap (click opens), countdown runs, NO holding.
+function bindPeekButton(){
+  const btn = document.getElementById('peek-btn');
+  if(!btn) return;
+  // clone to drop every previously-attached listener, then re-grab
+  const fresh = btn.cloneNode(true);
+  btn.parentNode.replaceChild(fresh, btn);
+  const b = document.getElementById('peek-btn');
+
+  if(store.peekMode === 'timed'){
+    // tap once — no hold, no preventDefault needed
+    b.addEventListener('click', ()=>{ if(!b.disabled) peekTap(); });
+  }else{
+    // press and hold
+    b.addEventListener('pointerdown', peekStart);
+    b.addEventListener('pointerup', peekEnd);
+    b.addEventListener('pointercancel', peekEnd);
+    b.addEventListener('pointerleave', peekEnd);
+    // stop the synthetic click / context menu from firing after a hold
+    b.addEventListener('click', (e)=>e.preventDefault());
+    b.addEventListener('contextmenu', (e)=>e.preventDefault());
+  }
+}
+
+function startCountdown(secs, onEnd){
+  const cd = document.getElementById('ans-count');
+  let left = secs;
+  cd.textContent = left;
+  clearInterval(peekCountTimer);
+  peekCountTimer = setInterval(()=>{
+    left--;
+    cd.textContent = Math.max(0,left);
+    if(left<=0){ clearInterval(peekCountTimer); onEnd && onEnd(); }
+  }, 1000);
+}
+
+// --- hold mode ---  (press and hold; release hides — NO timer)
+function peekStart(e){
+  if(store.peekMode!=='hold') return;
+  if(e && e.preventDefault) e.preventDefault();
+  const q = state.current; if(!q) return;
+  buzz(15);
+  fillAnswer();
+  document.getElementById('ans-count').textContent = '';   // no countdown in hold mode
+  document.getElementById('secret-wrap').classList.remove('expired');
+  document.getElementById('expired-overlay').classList.remove('show');
+  // in hold mode the on-answer button is unreachable (finger is down) — hide it;
+  // the "開始9UP" button lives on the gate screen after release instead
+  document.getElementById('answer-next-btn').style.display = 'none';
+  go('answer');
+}
+function peekEnd(){
+  if(store.peekMode!=='hold') return;
+  if(document.getElementById('screen-answer').classList.contains('active')){
+    // return to the gate WITHOUT resetting (so the proceed button can show)
+    document.getElementById('screen-answer').classList.remove('active');
+    document.getElementById('screen-answerGate').classList.add('active');
+    // 老實人 has now seen the answer → offer a way forward
+    document.getElementById('gate-next-btn').style.display = '';
+    // update the hint copy so it's clear they can either re-peek or proceed
+    const desc = document.getElementById('gate-desc');
+    if(desc) desc.innerHTML = '睇完可以再撳實重溫，<br>或者㩒下面「開始9UP」繼續。';
+  }
+}
+
+// --- timed mode ---  (tap to open, auto-lock on expiry — NO holding)
+function peekTap(){
+  const q = state.current; if(!q) return;
+  buzz(15);
+  fillAnswer();
+  document.getElementById('secret-wrap').classList.remove('expired');
+  document.getElementById('expired-overlay').classList.remove('show');
+  document.getElementById('answer-next-btn').style.display = '';   // tap-to-proceed lives here
+  go('answer');
+  startCountdown(store.peekSecs, timedExpire);
+}
+function timedExpire(){
+  buzz([20,60,20]);
+  document.getElementById('ans-count').textContent = 0;
+  document.getElementById('secret-wrap').classList.add('expired');
+  document.getElementById('expired-overlay').classList.add('show');
+}
+
+function finishPeek(){
+  clearInterval(peekCountTimer);
+  buzz(12);
+  fillPoint();
+  go('point');                                 // → 9UPing
+}
+
+// mirror the question's word (+ 3 hints in 有提示 mode) onto the 9UPing screen
+function fillPoint(){
+  const q = state.current; if(!q) return;
+  document.getElementById('pt-word').textContent = q.word;
+  const hints = document.getElementById('pt-hints');
+  if(state.mode === 'hints'){
+    if(hints) hints.style.display = '';
+    document.getElementById('pt-h1').textContent = q.hint1;
+    document.getElementById('pt-h2').textContent = q.hint2;
+    document.getElementById('pt-h3').textContent = q.hint3;
+  }else{
+    if(hints) hints.style.display = 'none';
+  }
+}
+
+// ---------- reveal slider (slide to unlock) ----------
+(function initSlider(){
+  const slider = document.getElementById('reveal-slider');
+  const knob   = document.getElementById('slider-knob');
+  const fill   = document.getElementById('slider-fill');
+  if(!slider) return;
+  let dragging=false, startX=0, x=0, max=0;
+
+  function geom(){ max = slider.clientWidth - knob.clientWidth - 10; }
+  function setX(v){
+    x = Math.max(0, Math.min(max, v));
+    knob.style.transform = `translateX(${x}px)`;
+    fill.style.width = (knob.clientWidth + x) + 'px';
+  }
+  function down(e){ dragging=true; geom(); startX = (e.touches?e.touches[0].clientX:e.clientX) - x; }
+  function move(e){
+    if(!dragging) return;
+    const cx = (e.touches?e.touches[0].clientX:e.clientX);
+    setX(cx - startX);
+    if(e.cancelable) e.preventDefault();
+  }
+  function up(){
+    if(!dragging) return;
+    dragging=false;
+    if(x >= max-4){ unlockReveal(); resetSlider(); }
+    else{ animateBack(); }
+  }
+  function animateBack(){
+    knob.style.transition='transform .2s'; fill.style.transition='width .2s';
+    setX(0);
+    setTimeout(()=>{knob.style.transition=''; fill.style.transition='';},220);
+  }
+  window.resetSlider = ()=>{ geom(); setX(0); };
+
+  knob.addEventListener('pointerdown', down);
+  window.addEventListener('pointermove', move, {passive:false});
+  window.addEventListener('pointerup', up);
+  window.addEventListener('resize', ()=>{geom(); setX(0);});
+})();
+
+function unlockReveal(){
+  buzz([15,40,15]);
+  const q = state.current; if(!q) return;
+  document.getElementById('res-word').textContent = q.word;
+  document.getElementById('res-answer').textContent = q.answer;
+  // three-direction recap only applies to 有提示 mode
+  const recap = document.getElementById('res-recap');
+  if(state.mode === 'hints'){
+    recap.style.display = '';
+    for(let i=1;i<=3;i++){
+      document.getElementById('recap-t'+i).textContent = q['hint'+i];
+      const row = document.getElementById('recap-'+i);
+      const tag = document.getElementById('recap-tag'+i);
+      const isTrue = (i===q.correctHintIndex);
+      row.classList.toggle('is-true', isTrue);
+      tag.textContent = isTrue ? '✓ 真' : '';
+    }
+  }else{
+    recap.style.display = 'none';
+  }
+  go('result');
+}
+
+// ---------- settings UI ----------
+function syncSettingsUI(){
+  document.getElementById('tg-wake').classList.toggle('on', store.wake);
+  document.getElementById('tg-haptic').classList.toggle('on', store.haptic);
+  document.querySelectorAll('#seg-hintmode button').forEach(b=>{
+    b.classList.toggle('on', b.dataset.v===store.hintMode);
+  });
+  document.querySelectorAll('#seg-peekmode button').forEach(b=>{
+    b.classList.toggle('on', b.dataset.v===store.peekMode);
+  });
+  // range slider + live badge
+  const rng = document.getElementById('rng-peeksecs');
+  rng.value = store.peekSecs;
+  document.getElementById('secs-badge').textContent = store.peekSecs + ' 秒';
+  // 限時秒數 only matters in timed mode — dim it otherwise
+  document.getElementById('row-peektime').classList.toggle('disabled', store.peekMode!=='timed');
+}
+function toggleWake(){
+  store.wake = !store.wake; save('cfg.wake', store.wake?'1':'0');
+  document.getElementById('tg-wake').classList.toggle('on', store.wake);
+  applyWakeLock();
+  buzz(10);
+}
+function toggleHaptic(){
+  store.haptic = !store.haptic; save('cfg.haptic', store.haptic?'1':'0');
+  document.getElementById('tg-haptic').classList.toggle('on', store.haptic);
+  buzz(10);
+}
+document.getElementById('seg-hintmode').addEventListener('click', (e)=>{
+  const b = e.target.closest('button'); if(!b) return;
+  store.hintMode = b.dataset.v; save('cfg.hintMode', store.hintMode);
+  syncSettingsUI(); buzz(10);
+});
+document.getElementById('seg-peekmode').addEventListener('click', (e)=>{
+  const b = e.target.closest('button'); if(!b) return;
+  store.peekMode = b.dataset.v; save('cfg.peekMode', store.peekMode);
+  syncSettingsUI(); buzz(10); updateGateCopy();
+});
+// range slider: update live badge as it drags, persist on the way
+document.getElementById('rng-peeksecs').addEventListener('input', (e)=>{
+  store.peekSecs = parseInt(e.target.value,10);
+  document.getElementById('secs-badge').textContent = store.peekSecs + ' 秒';
+  save('cfg.peekSecs', store.peekSecs);
+  updateGateCopy();
+});
+document.getElementById('rng-peeksecs').addEventListener('change', ()=>buzz(10));
+
+// gate screen copy adapts to the current peek mode
+function updateGateCopy(){
+  const btn = document.getElementById('peek-btn');
+  const desc = document.getElementById('gate-desc');
+  const head = document.getElementById('gate-head');
+  const badge = document.getElementById('gate-timebadge');
+  const badgeVal = document.getElementById('gate-timeval');
+  if(!btn) return;
+  if(store.peekMode==='timed'){
+    btn.textContent = '準備好，開始睇 →';
+    head.textContent = '淨係老實人先好㩒';
+    desc.innerHTML = '其他人請望開螢幕。<br>㩒「開始睇」就即刻倒數，夠鐘會蓋返，冇得再睇。';
+    badge.classList.remove('hidden');
+    badgeVal.textContent = store.peekSecs;
+  }else{
+    btn.textContent = '撳實睇答案';
+    head.textContent = '淨係老實人先好㩒';
+    desc.innerHTML = '其他人請望開螢幕。<br>撳實下面粒掣先睇到真答案，放手就即刻收埋。';
+    badge.classList.add('hidden');
+  }
+}
+
+// ---------- wake lock ----------
+let wakeSentinel=null;
+async function applyWakeLock(){
+  try{
+    if(store.wake && 'wakeLock' in navigator){
+      wakeSentinel = await navigator.wakeLock.request('screen');
+    }else if(wakeSentinel){
+      await wakeSentinel.release(); wakeSentinel=null;
+    }
+  }catch(e){/* not supported / denied */}
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && store.wake) applyWakeLock();
+});
+
+// ---------- boot ----------
+syncSettingsUI();
+updateGateCopy();
+applyWakeLock();
+loadBank();          // fetch data/questions.json (falls back gracefully)
+
+// register the service worker so the app is installable + works offline.
+// only runs over http(s) (e.g. GitHub Pages); silently skipped on file://.
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {/* offline / unsupported */});
+  });
+}
+</script>
+</body>
+</html>
