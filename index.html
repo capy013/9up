@@ -236,13 +236,18 @@
     justify-content:center; text-align:center; padding:10px 0;
     position:relative;
   }
-  /* Neon Stage: a soft spotlight blooms behind the word */
+  /* Neon Stage: a soft spotlight blooms behind the word.
+     Multi-stop fade so it dissolves smoothly with no visible ring/edge on OLED. */
   .q-center::before{
     content:""; position:absolute; top:50%; left:50%;
-    width:min(360px,86vw); height:min(360px,86vw);
+    width:min(440px,100vw); height:min(440px,100vw);
     transform:translate(-50%,-50%);
-    background:radial-gradient(circle, rgba(74,157,255,.22), transparent 60%);
-    filter:blur(14px); pointer-events:none; z-index:0;
+    background:radial-gradient(circle,
+      rgba(74,157,255,.20) 0%,
+      rgba(74,157,255,.10) 30%,
+      rgba(74,157,255,.03) 50%,
+      transparent 72%);
+    filter:blur(24px); pointer-events:none; z-index:0;
   }
   .q-center > *{ position:relative; z-index:1; }
   /* small, quiet tag — the WORD below is the star, not this label */
@@ -472,6 +477,9 @@
     font-size:clamp(150px, 46vw, 220px); line-height:1;
     transition:transform 1.15s cubic-bezier(.17,.67,.21,1);
     transform:rotate(var(--rot,0deg));
+    /* the 👉 glyph sits a touch low inside its box; nudge the box up so the
+       drawn hand reads as vertically centred (doesn't touch the rotate transform) */
+    margin-top:-0.12em;
   }
   .spin-finger.a{filter:drop-shadow(0 12px 26px rgba(0,191,255,.5));}
   .spin-finger.b{filter:drop-shadow(0 12px 26px rgba(255,204,0,.5));}
@@ -1287,13 +1295,16 @@ function fillPoint(){
   const q = state.current; if(!q) return;
   document.getElementById('pt-word').textContent = q.word;
   const hints = document.getElementById('pt-hints');
+  const qbody = hints ? hints.closest('.q-body') : null;
   if(state.mode === 'hints'){
     if(hints) hints.style.display = '';
+    if(qbody) qbody.classList.remove('no-hints');
     document.getElementById('pt-h1').textContent = q.hint1;
     document.getElementById('pt-h2').textContent = q.hint2;
     document.getElementById('pt-h3').textContent = q.hint3;
   }else{
     if(hints) hints.style.display = 'none';
+    if(qbody) qbody.classList.add('no-hints');   // centre the word when no hints
   }
 }
 
